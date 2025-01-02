@@ -61,8 +61,6 @@ URL_PREFIXES = [
 ]
 
 
-# 目标文件名（严格匹配文件名）
-TARGET_FILES = ['pom.xml', 'setup.py', 'setup.cfg', 'requirements.txt']
 
 # 该函数用于标准化URL，将其转为小写，去除末尾的斜杠（/）和.git后缀，确保URL一致性
 def normalize_url(url: str):
