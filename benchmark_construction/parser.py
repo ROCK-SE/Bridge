@@ -1,28 +1,32 @@
-import subprocess
 import argparse
 import os
-from packaging.requirements import Requirement
+import subprocess
 import xml.etree.ElementTree as ET
 
+from packaging.requirements import Requirement
+from woc.local import WocMapsLocal
 
-# Function to get the blob content using the blob hash
-def get_blob_content_from_hash(blob_hash: str, lookup_path: str):
-    """Fetch the content corresponding to a blob hash"""
+woc = WocMapsLocal()
+
+
+def read_blob(sha: str) -> str | None:
+    """Read a blob's content by it sha1 value
+
+    Parameters
+    ----------
+    sha : str
+        a sha1 hash string containing 40 hexadecimal digits
+
+    Returns
+    -------
+    str | None
+        the blob's content or None if an error occurs.
+    """
     try:
-        # Run the command to get the blob content using the lookup tool
-        result = subprocess.run(
-            f"echo {blob_hash} | {lookup_path}/showCnt blob",  # Pipe the blob hash to the showCnt tool
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True
-        )
-
-        if result.returncode == 0:
-            return result.stdout.strip()  # Return the content of the file
-        else:
-            print(f"Error fetching blob content for hash {blob_hash}: {result.stderr}")
-            return None
-    except Exception as e:
-        print(f"Error while fetching blob content: {e}")
-        return None
+        data = woc.show_content("blob", sha)
+    except:
+        data = None
+    return data
 
 
 # Function to parse the POM file and extract package version information
@@ -38,44 +42,48 @@ def parse_pom(file_content: str):
     root = tree.getroot()
 
     # Automatically detect namespaces if present
-    namespaces = {'maven': root.tag.split('}')[0].strip('{')} if '}' in root.tag else {}
+    namespaces = {"maven": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {}
 
     # Extract version information from <properties>
     properties = {}
-    for prop in root.findall('.//maven:properties', namespaces):
+    for prop in root.findall(".//maven:properties", namespaces):
         for child in prop:
             # Get the tag name without the namespace prefix
-            tag_name = child.tag.split('}')[1] if '}' in child.tag else child.tag
+            tag_name = child.tag.split("}")[1] if "}" in child.tag else child.tag
             properties[tag_name] = child.text.strip()
 
     # Extract dependencies and their versions from <dependencies>
     packages = []
-    for dependency in root.findall('.//maven:dependencies/maven:dependency', namespaces):
+    for dependency in root.findall(
+        ".//maven:dependencies/maven:dependency", namespaces
+    ):
         package = {}
 
         # Get groupId and artifactId
-        group_id = dependency.find('maven:groupId', namespaces)
-        artifact_id = dependency.find('maven:artifactId', namespaces)
+        group_id = dependency.find("maven:groupId", namespaces)
+        artifact_id = dependency.find("maven:artifactId", namespaces)
 
         if group_id is not None and artifact_id is not None:
             package_name = f"{group_id.text}:{artifact_id.text}"
 
             # Get version and handle variable references
-            version = dependency.find('maven:version', namespaces)
+            version = dependency.find("maven:version", namespaces)
             if version is not None:
                 version_text = version.text.strip()
 
                 # If the version is in the form of a variable like ${mybatis.spring}, replace with actual value
                 if version_text.startswith("${") and version_text.endswith("}"):
                     version_var = version_text.strip("${}")
-                    version = properties.get(version_var, version_text)  # Look up the version from properties
+                    version = properties.get(
+                        version_var, version_text
+                    )  # Look up the version from properties
                 else:
                     version = version_text
 
             # If version exists, add to packages
             if version is not None:
-                package['name'] = package_name
-                package['version'] = version
+                package["name"] = package_name
+                package["version"] = version
                 packages.append(package)
 
     # Remove the temporary POM file
@@ -106,13 +114,13 @@ def parse_requirements(file_content: str):
             current_line += line
 
         # Remove comments
-        current_line = current_line.split('#')[0].strip()
+        current_line = current_line.split("#")[0].strip()
 
         try:
             # Use packaging to parse the requirement and version
             req = Requirement(current_line)
             package = req.name
-            version = str(req.specifier) if req.specifier else 'latest'
+            version = str(req.specifier) if req.specifier else "latest"
             requirements[package] = version
         except ValueError:
             print(f"Invalid requirement format: {current_line}")  # Print invalid lines
@@ -162,9 +170,15 @@ if __name__ == "__main__":
     lookup_path = "~/lookup"  # Replace with the actual lookup tool path
 
     # Command-line arguments for blob hash and parse type
-    parser = argparse.ArgumentParser(description="Parse blob content to extract dependencies")
+    parser = argparse.ArgumentParser(
+        description="Parse blob content to extract dependencies"
+    )
     parser.add_argument("blob_hash", type=str, help="The blob hash to process")
-    parser.add_argument("parse_type", choices=["pom", "requirements"], help="Type of file to parse ('pom' or 'requirements')")
+    parser.add_argument(
+        "parse_type",
+        choices=["pom", "requirements"],
+        help="Type of file to parse ('pom' or 'requirements')",
+    )
 
     args = parser.parse_args()
 
