@@ -3,10 +3,6 @@ import os
 
 import pandas as pd
 from joblib import Parallel, delayed
-from tqdm import tqdm
-from woc.local import WocMapsLocal
-
-woc = WocMapsLocal()
 
 c2fbb_base_path = "/da7_data/basemaps/gz/c2fbbFull.V3.{id}.s"
 c2P_base_path = "/da7_data/basemaps/gz/c2PFull.V3.{id}.s"
