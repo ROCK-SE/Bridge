@@ -1,9 +1,11 @@
 import argparse
 import os
-import subprocess
+import re
 import xml.etree.ElementTree as ET
+from typing import Iterable
 
-from packaging.requirements import Requirement
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
 from woc.local import WocMapsLocal
 
 woc = WocMapsLocal()
@@ -29,17 +31,20 @@ def read_blob(sha: str) -> str | None:
     return data
 
 
-# Function to parse the POM file and extract package version information
-def parse_pom(file_content: str):
-    """Parse pom.xml and extract dependencies and versions"""
-    # Save the content to a temporary file
-    temp_pom_file = "temp_pom.xml"
-    with open(temp_pom_file, "w", encoding="utf-8") as f:
-        f.write(file_content)
+def parse_pom(content: str) -> dict[str, str]:
+    """Parse pom.xml to extract dependencies
 
-    # Parse the pom.xml file
-    tree = ET.parse(temp_pom_file)
-    root = tree.getroot()
+    Parameters
+    ----------
+    content : str
+        the content of a requirements.txt file
+
+    Returns
+    -------
+    dict[str, str]
+        a dict where each key is the dependency's name (groupId:atrifactId) and the value is the dependency's specifier (versionId)
+    """
+    root = ET.fromstring(content)
 
     # Automatically detect namespaces if present
     namespaces = {"maven": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {}
@@ -86,58 +91,127 @@ def parse_pom(file_content: str):
                 package["version"] = version
                 packages.append(package)
 
-    # Remove the temporary POM file
-    os.remove(temp_pom_file)
     return packages
 
 
-# Function to parse requirements.txt content and extract dependencies and versions
-def parse_requirements(file_content: str):
-    """Extract dependencies and versions from requirements.txt content"""
-    requirements = {}
-    lines = file_content.splitlines()
-    current_line = ""
+# https://pip.pypa.io/en/stable/reference/requirements-file-format/#comments
+# There are two types of comments:
+# 1. lines that begins with `#` are comments, e.g., # type 1 comment
+# 2. Whitespace followed by a # in a line, e.g., abc # type 2 comment
+COMMENT_RE = re.compile(r"(^|\s+)#.*$")
 
+
+def join_lines(lines: list[str]) -> Iterable[str]:
+    """Deal with [line continuations](https://pip.pypa.io/en/stable/reference/requirements-file-format/#line-continuations). Code adapted from [pip](https://github.com/pypa/pip/blob/ffbf6f0ce61170d6437ad5ff3a90086200ba9e2a/src/pip/_internal/req/req_file.py#L481)
+
+    Parameters
+    ----------
+    lines : list[str]
+        a list where each element corresponds to a line in the original requirements.txt file
+
+    Returns
+    -------
+    Iterable[str]
+        a generator producing joined lines
+    """
+    new_line: list[str] = []
     for line in lines:
-        line = line.strip()
-
-        # Ignore empty lines
-        if not line:
-            continue
-
-        # If the line ends with a backslash, it means the current line is continued
-        if line.endswith("\\"):
-            current_line += line[:-1]  # Remove the backslash and continue concatenating
-            continue
+        if not line.endswith("\\") or COMMENT_RE.match(line):
+            if COMMENT_RE.match(line):
+                # this ensures comments are always matched later
+                line = " " + line
+            if new_line:
+                new_line.append(line)
+                yield "".join(new_line)
+                new_line = []
+            else:
+                yield line
         else:
-            # Join the current line and proceed
-            current_line += line
+            new_line.append(line.strip("\\"))
 
-        # Remove comments
-        current_line = current_line.split("#")[0].strip()
+    # last line contains \
+    if new_line:
+        yield "".join(new_line)
 
+
+def ignore_comments(lines: Iterable[str]) -> Iterable[str]:
+    """Strips comments and filter empty lines. Code adapted from [pip](https://github.com/pypa/pip/blob/ffbf6f0ce61170d6437ad5ff3a90086200ba9e2a/src/pip/_internal/req/req_file.py#L512)
+
+    Parameters
+    ----------
+    lines : list[str]
+        a generator of lines produced by `join_lines`
+
+    Returns
+    -------
+    Iterable[str]
+        a generator producing non-empty and non-comment lines
+    """
+    for line in lines:
+        line = COMMENT_RE.sub("", line)
+        line = line.strip()
+        if line:
+            yield line
+
+
+def preprocess(content: str) -> Iterable[str]:
+    lines = content.splitlines()
+    lines = join_lines(lines)
+    lines = ignore_comments(lines)
+    return lines
+
+
+def get_args(line: str) -> str:
+    """Get the arguments in each requirement line. Code adapted from [pip](https://github.com/pypa/pip/blob/ffbf6f0ce61170d6437ad5ff3a90086200ba9e2a/src/pip/_internal/req/req_file.py#L436)"""
+    tokens = line.split(" ")
+    args = []
+    for token in tokens:
+        if token.startswith("-") or token.startswith("--"):
+            break
+        else:
+            args.append(token)
+    return " ".join(args)
+
+
+def parse_requirements(content: str) -> dict[str, str]:
+    """Parse requirements.txt to extract dependencies
+
+    Parameters
+    ----------
+    content : str
+        the content of a requirements.txt file
+
+    Returns
+    -------
+    dict[str, str]
+        a dict where each key is the dependency's canonicalized name and the value is the dependency's specifier
+    """
+    requirements: dict[str, str] = {}
+
+    for line in preprocess(content):
         try:
-            # Use packaging to parse the requirement and version
-            req = Requirement(current_line)
-            package = req.name
-            version = str(req.specifier) if req.specifier else "latest"
-            requirements[package] = version
-        except ValueError:
-            print(f"Invalid requirement format: {current_line}")  # Print invalid lines
-            current_line = ""  # Skip the invalid line and continue with the next one
+            args = get_args(line)
+            if not args:
+                continue
+            req = Requirement(args)
+            # The existence of url suggests that this package is not from PyPI,
+            # therefore we skip it.
+            if req.url is not None:
+                continue
+            name = canonicalize_name(req.name)
+            specifier = str(req.specifier) if req.specifier else ""
+            requirements[name] = specifier
+        except InvalidRequirement:
             continue
-
-        # Reset current_line for the next line
-        current_line = ""
 
     return requirements
 
 
 # Function to process the blob hash and choose the type of parsing (POM or requirements.txt)
-def process_blob(blob_hash: str, lookup_path: str, parse_type: str):
+def process_blob(blob_hash: str, parse_type: str):
     """Process the specified blob hash and parse either POM or requirements.txt"""
     # Fetch the content of the blob
-    file_content = get_blob_content_from_hash(blob_hash, lookup_path)
+    file_content = read_blob(blob_hash)
 
     if file_content:
         print(f"Processing blob: {blob_hash}")
