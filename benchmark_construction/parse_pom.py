@@ -50,8 +50,12 @@ def parse_pom(content: str) -> dict[str, str]:
                 if version_text.startswith("${") and version_text.endswith("}"):
                     version_var = version_text.strip("${}")
                     version = properties.get(
-                        version_var, version_text
+                        version_var, None
                     )  # Look up the version from properties
+                    
+                    #If version_var is not found in properties, skip this package
+                    if version is None:
+                        continue
                 else:
                     version = version_text
 
