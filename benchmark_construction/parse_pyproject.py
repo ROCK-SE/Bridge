@@ -241,7 +241,9 @@ def parse_setuptools(pyproject_file: str) -> list[dict]:
 
     except Exception as e:
         # Catch any exceptions and raise a more descriptive error
-        raise ValueError(f"无法从传入内容获取依赖信息: {str(e)}")
+        raise ValueError(
+            f"Unable to retrieve dependencies from the provided content: {str(e)}"
+        )
 
 
 # Main program
