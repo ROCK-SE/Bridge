@@ -71,15 +71,31 @@ def process_blob(blob_hash: str, parse_type: str):
                         )  # Split to get package and version
                         print(f"Package: {package},Version: {version}")
                 elif build_backend.startswith(
-                    ("setuptools", "flit", "hatch", "scikit")
+                    (
+                        "setuptools",
+                        "flit",
+                        "hatch",
+                        "scikit",
+                        "maturin",
+                        "pdm",
+                        "mesonpy",
+                    )
                 ):
                     backend = next(
                         backend
-                        for backend in ("setuptools", "flit", "hatch", "scikit")
+                        for backend in (
+                            "setuptools",
+                            "flit",
+                            "hatch",
+                            "scikit",
+                            "maturin",
+                            "pdm",
+                            "mesonpy",
+                        )
                         if build_backend.startswith(backend)
                     )
                     print(f"Build backend: {backend.capitalize()}")
-                    dependencies = parse_setuptools(file_content)
+                    dependencies = parse_general(file_content)
 
                     for dep in dependencies:
                         print(f"Package: {dep['package']}, Version: {dep['version']}")
@@ -173,8 +189,8 @@ def parse_poetry(pyproject_file: str) -> list[str]:
         )
 
 
-def parse_setuptools(pyproject_file: str) -> list[dict]:
-    """Parses the pyproject.toml file to extract dependencies with specified versions. This function is designed for the 'setuptools' build backend.
+def parse_general(pyproject_file: str) -> list[dict]:
+    """Parses the pyproject.toml file to extract dependencies with specified versions. This function is designed for the 'setuptools,flit,hatch,scikit,maturin,pdm,mesonpy' build backend.
 
     Args:
         pyproject_file (str): The content of the pyproject.toml file as a string.
