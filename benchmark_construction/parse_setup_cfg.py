@@ -1,169 +1,113 @@
-import argparse
-import configparser
-import re
+from configparser import ConfigParser
 
-from woc.local import WocMapsLocal
-
-woc = WocMapsLocal()
+from utils import parse_reqs
 
 
-def read_blob(sha: str) -> str | None:
-    """Read a blob's content by its sha1 value
+def _parse_list(value: str, separator: str = ",") -> list[str]:
+    """Parse `list-semi` or `list-comma` type of values. Code adapted from [setuptools](https://github.com/pypa/setuptools/blob/fb7f3d3cab98f2c00cbf18fe887ce73007f49e18/setuptools/config/setupcfg.py#L305).
 
     Parameters
     ----------
-    sha : str
-        a sha1 hash string containing 40 hexadecimal digits
+    value : str
+        a string to be parsed
+    separator : str, optional
+        list items separator character, by default ","
 
     Returns
     -------
-    str | None
-        the blob's content or None if an error occurs.
+    list[str]
+        a list of seperated items
     """
-    try:
-        data = woc.show_content("blob", sha)
-    except Exception as e:
-        data = None
-        print(f"Error fetching blob content: {e}")
-    return data
-
-
-# Function to process the blob hash and choose the type of parsing (setup.cfg)
-def process_blob(blob_hash: str, parse_type: str):
-    """Process the specified blob hash and parse either setup.cfg."""
-
-    # Fetch the content of the blob
-    file_content = read_blob(blob_hash)
-
-    if file_content:
-        print(f"Processing blob: {blob_hash}")
-
-        if parse_type == "setup.cfg":
-            # Parse the setup.cfg file and output dependencies with versions
-            dependencies = parse_setup_cfg(file_content)
-
-            # Output parsed results for install_requires
-            print("install_requires:")
-            for package in dependencies["install_requires"]:
-                print(f"  Package: {package['name']}, Version: {package['version']}")
-
-            # Output parsed results for extras_require
-            print("extras_require:")
-            for extra_name, deps in dependencies["extras_require"].items():
-                for package in deps:
-                    print(
-                        f"    Package: {package['name']}, Version: {package['version']}"
-                    )
-        else:
-            print("Invalid parse type. Please choose 'setup.cfg'.")
+    if "\n" in value:
+        value = value.splitlines()
     else:
-        print(f"Failed to fetch content for blob {blob_hash}")
+        value = value.split(separator)
+
+    return [chunk.strip() for chunk in value if chunk.strip()]
 
 
-def parse_install_requires(config: configparser.ConfigParser) -> list:
-    """Parse the 'install_requires' section in the setup.cfg file and extract package names and versions. Only dependencies with specified versions will be included in the result.
+def parse_install_requires(value: str | None) -> dict[str, str]:
+    # We do not consider the `file:` directive. If a `file:` directive is
+    # declared, its paramter is very likely to be `requirements.txt` which our
+    # requirements.txt parse will deal with.
+    if value is None or value.startswith("file:"):
+        return {}
 
-    Args:
-        config (configparser.ConfigParser): The parsed configparser object representing the setup.cfg file.
-
-    Returns:
-        list: A list of dictionaries containing the package name and version for each valid dependency.
-    """
-
-    install_requires = []
-    if "options" in config and "install_requires" in config["options"]:
-        install_requires_str = config["options"]["install_requires"]
-        # Parse each line in the 'install_requires' section
-        for line in install_requires_str.splitlines():
-            line = line.strip()
-            if line:  # Skip empty lines
-                match = re.match(r"([^=<>]+)([=<>!]+[\d\.]+)?", line)
-                if match:
-                    package_name = match.group(1)
-                    version = match.group(2) if match.group(2) else None
-                    if version:  # Only include dependencies with specified versions
-                        install_requires.append(
-                            {"name": package_name, "version": version}
-                        )
-    return install_requires
+    reqs = _parse_list(value, separator=";")
+    return parse_reqs(reqs)
 
 
-def parse_extras_require(config: configparser.ConfigParser) -> dict:
-    """Parse the 'extras_require' section in the setup.cfg file. Extracts extras and their corresponding dependencies only if the dependencies have specified versions.
-
-    Args:
-        config (configparser.ConfigParser): The parsed configparser object representing the setup.cfg file.
-
-    Returns:
-        dict: A dictionary where keys are extra names and values are lists of dictionaries containing the package name and version for each valid dependency.
-    """
-
+def parse_extras_require(
+    extras_require_section: dict[str, str]
+) -> dict[str, dict[str, str]]:
+    # Here, we do not deal with interpolation as pointed in [the setup.cfg's specification](https://setuptools.pypa.io/en/latest/userguide/declarative_config.html#interpolation)
+    # We find that [setuptools does not enable interpolation either](https://github.com/pypa/setuptools/blob/fb7f3d3cab98f2c00cbf18fe887ce73007f49e18/setuptools/_distutils/dist.py#L402)
     extra_dependencies = {}
-    if (
-        "options.extras_require" in config.sections()
-    ):  # Check if the 'extras_require' section exists
-        extras_require_section = config["options.extras_require"]
-        for extra_name, raw_dependencies in extras_require_section.items():
-            valid_dependencies = []
-            for line in raw_dependencies.splitlines():
-                line = line.strip()
-                if line:  # Skip empty lines
-                    match = re.match(r"([^=<>]+)([=<>!]+[\d\.]+)?", line)
-                    if match:
-                        package_name = match.group(1)
-                        version = match.group(2) if match.group(2) else None
-                        if version:  # Only include dependencies with specified versions
-                            valid_dependencies.append(
-                                {"name": package_name, "version": version}
-                            )
-            if (
-                valid_dependencies
-            ):  # If any valid_dependencies exist for this extra, add to result dictionary
-                extra_dependencies[extra_name] = valid_dependencies
+    for extra_name, raw_dependencies in extras_require_section.items():
+        extra_dependencies[extra_name] = parse_install_requires(raw_dependencies)
     return extra_dependencies
 
 
-def parse_setup_cfg(file_content: str) -> dict[str, list[dict[str, str]]]:
-    """Parse the setup.cfg content and extract dependencies with versions.
+def parse_setup_cfg(content: str) -> dict[str, str]:
+    """Parse setup.cfg to extract dependencies from the `install_requires` and `extras_require` options.
+    This implementation is based on [the specification of setup.cfg](https://setuptools.pypa.io/en/latest/userguide/declarative_config.html) and [the parser implemented by setuptools](https://github.com/pypa/setuptools/blob/main/setuptools/config/setupcfg.py).
 
-    Args:
-        file_content (str): The content of the setup.cfg file as a string.
+    Parameters
+    ----------
+    content : str
+        a string representing the content of a setup.cfg file
 
-    Returns:
-        dict[str, list[dict[str, str]]]: A dictionary with two keys:
-            - 'install_requires': A list of dictionaries with package names and versions.
-            - 'extras_require': A dictionary with extra names as keys and lists of package versions.
+    Returns
+    -------
+    dict[str, str]
+        a dict with the package name as the key and the package's version constraint as the value
     """
-
-    config = configparser.ConfigParser()
-    config.read_string(file_content)  # Read the configuration content as a string
-
     dependencies = {"install_requires": [], "extras_require": {}}
+    dependencies = {}
+    try:
+        parser = ConfigParser()
+        parser.optionxform = str
+        parser.read_string(content)
+        for section in parser.sections():
+            if section == "options":
+                # install_requires can only in the [options] section
+                install_requires = parser.get(
+                    "options", "install_requires", fallback=None
+                )
+                if install_requires is None:
+                    # According to [setuptools](https://github.com/pypa/setuptools/blob/fb7f3d3cab98f2c00cbf18fe887ce73007f49e18/setuptools/dist.py#L519), "install-requires" is also a valid options
+                    install_requires = parser.get(
+                        "options", "install-requires", fallback=None
+                    )
 
-    # Parse 'install_requires' and 'extras_require' sections
-    dependencies["install_requires"] = parse_install_requires(config)
-    dependencies["extras_require"] = parse_extras_require(config)
+                for name, constraint in parse_install_requires(
+                    install_requires
+                ).items():
+                    # if `name` is already in dependencies, we do not assign constraint.
+                    # That is, we only keep the first version constraint for each package
+                    dependencies[name] = dependencies.get(name, constraint)
+
+            # extras_require can reside in the [options.extras_require] section
+            # or in the [options] section with the `file:` directive where
+            # value is read from a list of files and then concatenated read.
+            # We do not consider the latter case since we also process
+            # requirements.txt files (if the project has one), which is often
+            # the parameter of the `file:` directive.
+            elif section == "options.extras_require":
+                extras_require_section = {}
+                options = parser.options(section)
+                for opt in options:
+                    if opt == "__name__":
+                        continue
+
+                    val = parser.get(section, opt)
+                    extras_require_section[opt] = val
+
+                for res in parse_extras_require(extras_require_section).values():
+                    for name, constraint in res.items():
+                        dependencies[name] = dependencies.get(name, constraint)
+
+    except:
+        pass
 
     return dependencies
-
-
-# Main program
-if __name__ == "__main__":
-    # Directly declare the lookup tool path
-    lookup_path = "~/lookup"  # Replace with the actual lookup tool path
-
-    # Command-line arguments for blob hash and parse type
-    parser = argparse.ArgumentParser(
-        description="Parse blob content to extract dependencies"
-    )
-    parser.add_argument("blob_hash", type=str, help="The blob hash to process")
-    parser.add_argument(
-        "parse_type",
-        choices=["setup.cfg"],
-        help="Type of file to parse ('setup.cfg')",
-    )
-
-    args = parser.parse_args()
-
-    # Process the blob hash and parse based on the specified type
-    process_blob(args.blob_hash, args.parse_type)
