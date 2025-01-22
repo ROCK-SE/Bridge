@@ -1,284 +1,236 @@
-import tomli
-import re
-import argparse
-from woc.local import WocMapsLocal
+import tomllib
 
-woc = WocMapsLocal()
+from utils import parse_reqs
 
 
-def read_blob(sha: str) -> str | None:
-    """Read a blob's content by its sha1 value
+def parse_deps(reqs: list[str], extras_req: dict[str, list]) -> dict[str, str]:
+    dependencies = {}
 
-    Parameters
-    ----------
-    sha : str
-        a sha1 hash string containing 40 hexadecimal digits
+    for name, constraint in parse_reqs(reqs).items():
+        dependencies[name] = dependencies.get(name, constraint)
 
-    Returns
-    -------
-    str | None
-        the blob's content or None if an error occurs.
-    """
+    for reqs in extras_req.values():
+        for name, constraint in parse_reqs(reqs).items():
+            dependencies[name] = dependencies.get(name, constraint)
+
+    return dependencies
+
+
+def pep621_parser(pp_toml: dict) -> dict[str, str]:
+    """Parse dependencies from the pyproject.toml according to [the pyproject.toml specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/)."""
+    project_table = pp_toml.get("project", {})
+    reqs = project_table.get("dependencies", [])
+    optional_dependencies = project_table.get("optional-dependencies", {})
+    return parse_deps(reqs, optional_dependencies)
+
+
+def flit_parser(pp_toml: dict) -> dict[str, str]:
+    """Parse dependencies from pyproject.toml based on [Flit's pyproject.toml specification](https://flit.pypa.io/en/stable/pyproject_toml.html). Flit provides two ways to specify metadata, the newer one via a [project] table and the older one via a [tool.flit.metadata] table along with [tool.flit.scripts] and [tool.flit.entrypoints]. But Flit does not allow to mix them"""
+    tool_flit = pp_toml.get("tool", {}).get("flit", {})
+    if "project" in pp_toml:
+        # Can not mix the two ways
+        if "metadata" in tool_flit:
+            return {}
+        elif ("scripts" in tool_flit) or ("entrypoints" in tool_flit):
+            return {}
+
+        return pep621_parser(pp_toml)
+
+    elif "metadata" in tool_flit:
+        # The [tool.flit.module] can be only used with the [project] table
+        if "module" in tool_flit:
+            return {}
+        md_sect = tool_flit["metadata"]
+        requires = md_sect.get("requires", [])
+        requires_extra = md_sect.get("requires-extra", {})
+        return parse_deps(requires, requires_extra)
+
+    return {}
+
+
+def convert_single_caret(req: str) -> str:
+    req = "".join(req.split())
+    if req == "^0":
+        return ">=0.0.0 <1.0.0"
+    if req == "^0.0":
+        return ">=0.0.0 <0.1.0"
     try:
-        data = woc.show_content("blob", sha)
-    except Exception as e:
-        data = None
-        print(f"Error fetching blob content: {e}")
-    return data
-
-
-def get_build_backend(pyproject_content: str) -> str:
-    """Get the build-backend information from the pyproject.toml content.
-
-    Args:
-        pyproject_content (str): Content of the pyproject.toml file
-
-    Returns:
-        str: Returns the build-backend string
-    """
-
-    try:
-        data = tomli.loads(pyproject_content)
-        build_backend = data.get("build-system", {}).get("build-backend", "")
-        return build_backend
-    except Exception as e:
-        print(f"Unable to retrieve build-backend: {str(e)}")
-        return ""
-
-
-def process_blob(blob_hash: str, parse_type: str):
-    """Process the specified blob hash and parse either pyproject.toml based on build-backend."""
-
-    file_content = read_blob(blob_hash)
-
-    if file_content:
-        print(f"Processing blob: {blob_hash}")
-
-        if parse_type == "pyproject.toml":
-            try:
-                # Determine the build-backend from the pyproject.toml content
-                build_backend = get_build_backend(file_content)
-
-                if build_backend.startswith("poetry"):
-                    print("Build backend: Poetry")
-                    dependencies = parse_poetry(file_content)
-                    # Output parsed dependencies with version in the desired format
-                    print("All dependencies and versions:")
-                    for dep in dependencies:
-                        # Modify the output format here
-                        package, version = dep.split(
-                            " ", 1
-                        )  # Split to get package and version
-                        print(f"Package: {package},Version: {version}")
-                elif build_backend.startswith(
-                    (
-                        "setuptools",
-                        "flit",
-                        "hatch",
-                        "scikit",
-                        "maturin",
-                        "pdm",
-                        "mesonpy",
-                    )
-                ):
-                    backend = next(
-                        backend
-                        for backend in (
-                            "setuptools",
-                            "flit",
-                            "hatch",
-                            "scikit",
-                            "maturin",
-                            "pdm",
-                            "mesonpy",
-                        )
-                        if build_backend.startswith(backend)
-                    )
-                    print(f"Build backend: {backend.capitalize()}")
-                    dependencies = parse_general(file_content)
-
-                    for dep in dependencies:
-                        print(f"Package: {dep['package']}, Version: {dep['version']}")
-
-                else:
-                    print(f"Unknown build backend: {build_backend}")
-                    return
-            except Exception as e:
-                print(f"Unable to parse pyproject.toml file: {str(e)}")
+        specifier = req[1:].split(".", 2)
+        specifier = specifier + (3 - len(specifier)) * ["0"]
+        low = ".".join(specifier)
+        if specifier[0] != "0":
+            high = f"{int(specifier[0]) + 1}.0.0"
+            return f">={low},<{high}"
+        if specifier[1] == "0":
+            if specifier[2] != "0":
+                return f"=={low}"
         else:
-            print("Invalid parse type. Please choose 'pyproject.toml'.")
-    else:
-        print(f"Failed to fetch content for blob {blob_hash}")
+            high = f"0.{int(specifier[1]) + 1}.0"
+            return f">={low},<{high}"
+    except:
+        return req
 
 
-def parse_poetry(pyproject_file: str) -> list[str]:
-    """Extract dependencies with specified versions from pyproject.toml file. This function handles the 'poetry' build backend.
-
-    Args:
-        file_content (str): The content of the pyproject.cfg file as a string.
-
-    Returns:
-        list[str]: A list of dependencies with package names and versions in the format "package_name version", where the version is explicitly defined.
-
-    """
-
-    def extract_dependencies(deps):
-        """Extract dependencies with specified versions."""
-        extracted_deps = []
-        version_pattern = re.compile(
-            r"(==|>=|<=|!=|>|<|~\=|\^)?\S+"  # Supports all comparison operators
-        )
-        if isinstance(deps, dict):
-            for dep_name, dep_info in deps.items():
-                if dep_name == "python":
-                    continue
-                if isinstance(dep_info, str):
-                    if version_pattern.search(dep_info):
-                        dep_info = dep_info.lstrip("^~")  # Remove ^ and ~ symbols
-                        extracted_deps.append(f"{dep_name} {dep_info}")
-                elif isinstance(dep_info, dict):
-                    version_spec = dep_info.get("version")
-                    if version_spec and version_pattern.search(version_spec):
-                        version_spec = version_spec.lstrip(
-                            "^~"
-                        )  # Remove ^ and ~ symbols
-                        extracted_deps.append(f"{dep_name} {version_spec}")
-        elif isinstance(deps, list):
-            for dep in deps:
-                if version_pattern.search(dep):
-                    dep = dep.lstrip("^~")  # Remove ^ and ~ symbols
-                    extracted_deps.append(f"{dep} {dep}")
-        return extracted_deps
-
+def convert_single_tilde(req: str) -> str:
+    req = "".join(req.split())
+    specifier = req[1:].split(".", 2)
+    cnt = len(specifier)
+    specifier = specifier + (3 - len(specifier)) * ["0"]
+    low = ".".join(specifier)
     try:
-        data = tomli.loads(pyproject_file)
-
-        # Extract dependencies sections
-        poetry_dependencies = (
-            data.get("tool", {}).get("poetry", {}).get("dependencies", {})
-        )
-        poetry_dev_dependencies = (
-            data.get("tool", {}).get("poetry", {}).get("dev-dependencies", {})
-        )
-        project_dependencies = data.get("project", {}).get("dependencies", [])
-
-        # Extract dependencies from tool.poetry.group.*.dependencies paths
-        group_dependencies = []
-        poetry_tool_data = data.get("tool", {}).get("poetry", {})
-        for key, value in poetry_tool_data.get("group", {}).items():
-            if "dependencies" in value:
-                group_dependencies.extend(
-                    extract_dependencies(value.get("dependencies", {}))
-                )
-
-        # Extract normal dependencies
-        direct_dependencies = extract_dependencies(poetry_dependencies)
-        dev_dependencies = extract_dependencies(poetry_dev_dependencies)
-        project_deps = extract_dependencies(project_dependencies)
-
-        # Combine all dependencies
-        all_dependencies = (
-            direct_dependencies + dev_dependencies + project_deps + group_dependencies
-        )
-
-        return all_dependencies
-
-    except Exception as e:
-        raise ValueError(
-            f"Unable to retrieve dependencies from the provided content: {str(e)}"
-        )
+        if cnt >= 2:
+            high = f"{specifier[0]}.{int(specifier[1])+1}.0"
+            return f">={low},<{high}"
+        else:
+            return f">={low},<{int(specifier[0])+1}.0.0"
+    except:
+        return req
 
 
-def parse_general(pyproject_file: str) -> list[dict]:
-    """Parses the pyproject.toml file to extract dependencies with specified versions. This function is designed for the 'setuptools,flit,hatch,scikit,maturin,pdm,mesonpy' build backend.
+def convert_caret_tilde(req: str) -> str:
+    """Convert the caret requirement and tilde requirement supported by poetry to the requirements in PEP508."""
+    req = "".join(req.split())
+    parts = req.split(",")
+    res = []
+    for p in parts:
+        if p == "*":
+            continue
+        elif p.startswith("^"):
+            res.append(convert_single_caret(p))
+        elif p.startswith("~") and (not p.startswith("~=")):
+            res.append(convert_single_tilde(p))
+        else:
+            res.append(p)
+    return ",".join(res)
 
-    Args:
-        pyproject_file (str): The content of the pyproject.toml file as a string.
 
-    Returns:
-        list[dict]: A list of dictionaries containing 'package' and 'version' keys.
-                    Each dictionary represents a dependency with a specified version.
-    """
+def parse_poetry_dependencies(
+    poetry_reqs: dict,
+) -> tuple[dict[str, str], dict[str, str]]:
+    reqs, optional_reqs = [], []
+    for name, constraints in poetry_reqs.items():
+        # Poetry support declaring python version in the [tool.poetry.dependencies] table
+        if name.lower() == "python":
+            continue
 
-    def extract_dependencies(deps):
-        """Extract dependencies with explicitly specified versions. Only dependencies with a clear version are extracted.
+        # Poetry support declaring multiple constraint dependencies in the [tool.poetry.dependencies] table
+        # We do not consider such dependencies to ensure the accuracy
+        if isinstance(constraints, list):
+            continue
 
-        Args:
-            deps (list): A list of dependencies, which could be strings or dictionaries.
+        if isinstance(constraints, dict):
+            # Skip dependencies beyond PyPI
+            if any(s in constraints for s in ["git", "path", "url", "source"]):
+                continue
+            # Poetry supports caret requirements and tilde requirements, which are not supported
+            # by PEP 508. We do not parse these two types of requirements for the sake of speed
+            # since we have to process millions of files.
+            spec = constraints.get("version", "")
+            spec = convert_caret_tilde(spec)
+            if constraints.get("optional"):
+                optional_reqs.append(f"{name}{spec}")
+            else:
+                reqs.append(f"{name}{spec}")
+        elif isinstance(constraints, str):
+            spec = convert_caret_tilde(constraints)
+            reqs.append(f"{name}{spec}")
 
-        Returns:
-            list: A list of dependencies with explicit version specifications.
-        """
-        extracted_deps = []
-        for dep in deps:
-            if isinstance(dep, str):  # Ensure the dependency is a string
-                # Only extract dependencies with a clear version, excluding conditional or versionless dependencies
-                version_match = re.search(r"(==|>=|<=|!=|>|\<|~\=)\S+", dep)
-                if version_match:
-                    # If a version requirement is matched, and it's not a conditional dependency
-                    if ";" not in dep:
-                        extracted_deps.append(dep)
-        return extracted_deps
+    return parse_reqs(reqs), parse_reqs(optional_reqs)
 
+
+def poetry_parser(pp_toml: dict) -> dict[str, str]:
     try:
-        # Load the pyproject.toml configuration using tomli (to parse the content)
-        data = tomli.loads(pyproject_file)
+        project_table = pp_toml.get("project", {})
 
-        # Extract dependencies section
-        dependencies = data.get("project", {}).get("dependencies", [])
-        optional_dependencies = data.get("project", {}).get("optional-dependencies", {})
+        # parse dependencies in [project] table
+        dependencies = {}
+        reqs = project_table.get("dependencies", [])
+        for name, constraint in parse_reqs(reqs).items():
+            dependencies[name] = dependencies.get(name, constraint)
 
-        # Extract direct dependencies with explicit versions
-        direct_dependencies = extract_dependencies(dependencies)
+        # parse optional dependencies in [project] table
+        optional_dependencies = {}
+        extras_req = project_table.get("optional-dependencies", {})
+        for reqs in extras_req.values():
+            for name, constraint in parse_reqs(reqs).items():
+                optional_dependencies[name] = dependencies.get(name, constraint)
 
-        # Extract optional dependencies with explicit versions
-        optional_deps = []
-        for extra, deps in optional_dependencies.items():
-            if isinstance(deps, list):
-                optional_deps.extend(extract_dependencies(deps))
-
-        # Combine direct and optional dependencies
-        all_dependencies = direct_dependencies + optional_deps
-
-        # Parse out package names and versions
-        parsed_dependencies = []
-        for dep in all_dependencies:
-            # Use regex to match package name and version
-            match = re.match(r"([a-zA-Z0-9\-_.]+)([<>=!~]{1,2}\S+)?", dep)
-            if match:
-                package = match.group(1)  # Get package name
-                version = match.group(2)  # Get version number
-
-                # Only add to the result list if version is specified
-                if version:
-                    parsed_dependencies.append({"package": package, "version": version})
-
-        return parsed_dependencies
-
-    except Exception as e:
-        # Catch any exceptions and raise a more descriptive error
-        raise ValueError(
-            f"Unable to retrieve dependencies from the provided content: {str(e)}"
+        # parse dependencies and optional dependencies in [project] table
+        tool_poetry = pp_toml.get("tool", {}).get("poetry", {})
+        poetry_reqs = tool_poetry.get("dependencies", {})
+        poetry_dependencies, optional_poetry_dependencies = parse_poetry_dependencies(
+            poetry_reqs
         )
 
+        results = {}
+        if (not dependencies) and (not optional_dependencies):
+            results.update(poetry_dependencies)
+            results.update(optional_poetry_dependencies)
+            return results
 
-# Main program
-if __name__ == "__main__":
-    # Directly declare the lookup tool path
-    lookup_path = "~/lookup"  # Replace with the actual lookup tool path
+        # determine final dependencies by the dynamic field
+        dynamic = project_table.get("dynamic", [])
+        if "dependencies" in dynamic:
+            results.update(poetry_dependencies)
+        else:
+            results.update(dependencies)
 
-    # Command-line arguments for blob hash and parse type
-    parser = argparse.ArgumentParser(
-        description="Parse blob content to extract dependencies"
-    )
-    parser.add_argument("blob_hash", type=str, help="The blob hash to process")
-    parser.add_argument(
-        "parse_type",
-        choices=["pyproject.toml"],
-        help="Type of file to parse ('pyproject.toml')",
-    )
+        if "optional-dependencies" in dynamic:
+            results.update(optional_poetry_dependencies)
+        else:
+            results.update(optional_dependencies)
 
-    args = parser.parse_args()
+        return results
+    except Exception as e:
+        return {}
 
-    # Process the blob hash and parse based on the specified type
-    process_blob(args.blob_hash, args.parse_type)
+
+# Build backends listed in [the Tool recommendations page of the Python Packaging User Guide](https://packaging.python.org/en/latest/guides/tool-recommendations/#build-backends)
+VALID_BUILD_BACKEND = {
+    # [Setuptools](https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html)
+    # setuptools also supports specifying dependencies and optional-dependencies using the file directive
+    # in the dynamic field. Here, we do not deal with this case, since we will deal with requirements.txt
+    # which is often the parameter of the file directive
+    "setuptools.build_meta": pep621_parser,
+    # [Flit-core](https://flit.pypa.io/en/stable/pyproject_toml.html)
+    "flit_core.buildapi": flit_parser,
+    # [Hatchling](https://hatch.pypa.io/latest/config/build/)
+    "hatchling.build": pep621_parser,
+    # [PDM-backend](https://backend.pdm-project.org/)
+    "pdm.backend": pep621_parser,
+    # [Poetry-core](https://python-poetry.org/docs/pyproject/#poetry-and-pep-517)
+    "poetry.core.masonry.api": poetry_parser,
+    "poetry.masonry.api": poetry_parser,
+    # [meson-python](https://mesonbuild.com/meson-python/)
+    "mesonpy": pep621_parser,
+    # [scikit-build-core](https://scikit-build-core.readthedocs.io/en/latest/getting_started.html#python-package-configuration)
+    "scikit_build_core.build": pep621_parser,
+    # [Maturin](https://www.maturin.rs/#source-distribution)
+    "maturin": pep621_parser,
+}
+
+
+def get_build_backend(pp_toml: dict) -> str | None:
+    build_system = pp_toml.get("build-system")
+    if build_system is None:
+        # default build backend: setuptools
+        return "setuptools.build_meta"
+    build_backend = build_system.get("build-backend")
+    if build_backend is None:
+        return "setuptools.build_meta"
+    # We only consider build backends in VALID_BUILD_BACKEND
+    if build_backend not in VALID_BUILD_BACKEND:
+        return None
+    return build_backend
+
+
+def parse_pyproject_toml(content: str) -> dict[str, str]:
+    try:
+        pp_toml = tomllib.loads(content)
+        build_backend = get_build_backend(pp_toml)
+        if build_backend is None:
+            return {}
+        parser = VALID_BUILD_BACKEND[build_backend]
+        return parser(pp_toml)
+    except:
+        return {}

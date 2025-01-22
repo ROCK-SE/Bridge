@@ -62,7 +62,6 @@ def parse_setup_cfg(content: str) -> dict[str, str]:
     dict[str, str]
         a dict with the package name as the key and the package's version constraint as the value
     """
-    dependencies = {"install_requires": [], "extras_require": {}}
     dependencies = {}
     try:
         parser = ConfigParser()
