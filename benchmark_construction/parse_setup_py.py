@@ -41,7 +41,7 @@ class SetupPyVisitor(ast.NodeVisitor):
         # global index counter for all list variables
         self.counter = 0
 
-    def get_keywords_values(self):
+    def get_keywords_values(self) -> list[str]:
         self.visit(self.ast)
         values = []
         for kw in self.keywords:
@@ -175,7 +175,7 @@ class SetupPyVisitor(ast.NodeVisitor):
                             continue
                         self.resolve_assignment("@" + kw, keyword.value, kw)
 
-    def merge(self, variable: str):
+    def merge(self, variable: str) -> list[str]:
         values = []
         for k, v in self.variable_values.items():
             if k.startswith(f"{variable}.") or k.startswith(variable):
