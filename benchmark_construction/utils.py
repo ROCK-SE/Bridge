@@ -1,5 +1,8 @@
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
+from woc.local import WocMapsLocal
+
+woc = WocMapsLocal()
 
 
 def parse_reqs(reqs: list[str]) -> dict[str, str]:
@@ -32,3 +35,11 @@ def parse_reqs(reqs: list[str]) -> dict[str, str]:
         except InvalidRequirement:
             pass
     return dependencies
+
+
+def read_blob(sha: str) -> str | None:
+    """Read a blob's content by it sha1 value."""
+    try:
+        return woc.show_content("blob", sha)
+    except:
+        return None
