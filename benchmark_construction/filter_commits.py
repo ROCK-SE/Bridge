@@ -1,5 +1,6 @@
 import gzip
 import os
+import string
 
 import pandas as pd
 from joblib import Parallel, delayed
@@ -147,6 +148,18 @@ def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> N
         df.to_csv(save_path, index=False)
 
 
+def is_valid_sha1(sha: str):
+    if (len(sha) == 40) and all(c in string.hexdigits for c in sha):
+        return True
+    return False
+
+
+def valid_sha_value(row):
+    if is_valid_sha1(row["new blob"]) and is_valid_sha1(row["old blob"]):
+        return True
+    return False
+
+
 def main(
     target_files: list[str],
     save_folder: str,
@@ -194,6 +207,7 @@ def main(
             os.remove(f"{save_path}.{i}")
 
         data = pd.concat(data)
+        data = data[data.apply(valid_sha_value, axis=1)]
         data.to_csv(save_path, index=False)
 
 
