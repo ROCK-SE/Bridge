@@ -30,6 +30,7 @@ class SetupPyVisitor(ast.NodeVisitor):
                 code = py2_to_py3(code)
                 self.ast = ast.parse(code)
             except:
+                self.ast = None
                 return
         self.keywords = keywords
         # Store the constant values (value) of each variable (key)
@@ -205,6 +206,11 @@ def parse_setup_py(code: str) -> dict[str, str]:
     dict[str, str]
         a dict where each key is the dependency's canonicalized name and the value is the dependency's specifier
     """
-    setuppy_visitor = SetupPyVisitor(code, keywords=KEYWORDS)
-    reqs = setuppy_visitor.get_keywords_values()
-    return parse_reqs(reqs)
+    try:
+        setuppy_visitor = SetupPyVisitor(code, keywords=KEYWORDS)
+        if setuppy_visitor.ast is None:
+            return {}
+        reqs = setuppy_visitor.get_keywords_values()
+        return parse_reqs(reqs)
+    except:
+        return {}
