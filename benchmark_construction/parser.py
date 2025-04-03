@@ -87,7 +87,7 @@ def main(
             for k, v in data.items():
                 result[k] = v
         os.remove(f"{save_path}.json.{i}")
-        
+
         with open(f"{save_path}.missing.{i}") as inf:
             missing.extend(inf.read().splitlines())
         os.remove(f"{save_path}.missing.{i}")
