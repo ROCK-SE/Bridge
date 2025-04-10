@@ -10,8 +10,8 @@ tqdm.pandas()
 
 CONFIG_TYPES = [
     "setup.cfg",
-    "pyproject.toml",
     "setup.py",
+    "pyproject.toml",
     "requirements.txt",
     "pom.xml",
 ]
@@ -61,7 +61,9 @@ def filter(file_type: str, prefix: str):
     save_folder = os.path.join(prefix, "updates")
     os.makedirs(save_folder, exist_ok=True)
     save_path = os.path.join(save_folder, f"{file_type}_updates.csv")
-    updates.to_csv(save_path, index=False)
+    updates[["commit", "filepath", "new blob", "old blob", "update pairs"]].to_csv(
+        save_path, index=False
+    )
 
 
 if __name__ == "__main__":
