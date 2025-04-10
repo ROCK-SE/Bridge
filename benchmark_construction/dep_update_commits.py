@@ -4,9 +4,7 @@ import os
 
 import pandas as pd
 from packaging.version import Version
-from tqdm import tqdm
-
-tqdm.pandas()
+from pandarallel import pandarallel
 
 CONFIG_TYPES = [
     "setup.cfg",
@@ -54,7 +52,7 @@ def filter(file_type: str, prefix: str):
 
     commits_info["new deps"] = commits_info["new blob"].map(dependencies)
     commits_info["old deps"] = commits_info["old blob"].map(dependencies)
-    commits_info["update pairs"] = commits_info.progress_apply(get_updates, axis=1)
+    commits_info["update pairs"] = commits_info.parallel_apply(get_updates, axis=1)
     updates = commits_info[commits_info["update pairs"].str.len() > 0]
     print(f"{len(updates)} commits update dependencies in {file_type}")
 
@@ -80,8 +78,13 @@ if __name__ == "__main__":
         type=str,
         help="the directory to read commits and save results",
     )
+    parser.add_argument(
+        "-n", "--num_workers", type=int, default=1, help="number of threads"
+    )
 
     args = parser.parse_args()
+    pandarallel.initialize(nb_workers=args.num_workers, progress_bar=True)
+
     cft = args.configuration_file_type
     if cft == "all":
         for cfg in CONFIG_TYPES:
