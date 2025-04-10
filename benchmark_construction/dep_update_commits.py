@@ -3,7 +3,6 @@ import json
 import os
 
 import pandas as pd
-from packaging.version import Version
 from pandarallel import pandarallel
 
 CONFIG_TYPES = [
@@ -15,15 +14,23 @@ CONFIG_TYPES = [
 ]
 
 
+def is_strict_ver(identifier: str):
+    parts = identifier.split(".")
+    if len(parts) > 3:
+        return False
+    if all(p.isnumeric() for p in parts):
+        return True
+    return False
+
+
 def get_updates(row):
     update_pairs = []
     new_deps, old_deps = row["new deps"], row["old deps"]
     for pkg, new_spec in new_deps.items():
         if not new_spec.startswith("=="):
             continue
-        try:
-            new_version = Version(new_spec[2:])
-        except:
+        new_version = new_spec[2:]
+        if not is_strict_ver(new_version):
             continue
 
         old_spec = old_deps.get(pkg)
@@ -31,9 +38,8 @@ def get_updates(row):
             continue
         if not old_spec.startswith("=="):
             continue
-        try:
-            old_version = Version(old_spec[2:])
-        except:
+        old_version = old_spec[2:]
+        if not is_strict_ver(old_version):
             continue
 
         if new_version != old_version:
@@ -54,7 +60,7 @@ def filter(file_type: str, prefix: str):
     commits_info["old deps"] = commits_info["old blob"].map(dependencies)
     commits_info["update pairs"] = commits_info.parallel_apply(get_updates, axis=1)
     updates = commits_info[commits_info["update pairs"].str.len() > 0]
-    print(f"{len(updates)} commits update dependencies in {file_type}")
+    print(f"\n{len(updates)} commits update dependencies in {file_type}")
 
     save_folder = os.path.join(prefix, "updates")
     os.makedirs(save_folder, exist_ok=True)
