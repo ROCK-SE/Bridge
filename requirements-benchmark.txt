@@ -2,3 +2,4 @@ pandas==2.2.3
 joblib==1.4.2
 python-woc==0.2.5
 packaging==24.2
+pandarallel==1.6.5
