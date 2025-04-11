@@ -23,7 +23,7 @@ def is_strict_ver(identifier: str):
     return False
 
 
-def get_updates(row):
+def get_updates_py(row):
     update_pairs = []
     new_deps, old_deps = row["new deps"], row["old deps"]
     for pkg, new_spec in new_deps.items():
@@ -47,6 +47,31 @@ def get_updates(row):
     return update_pairs
 
 
+def get_updates_java(row):
+    update_pairs = []
+    new_deps, old_deps = row["new deps"], row["old deps"]
+    for pkg, new_spec in new_deps.items():
+        # https://maven.apache.org/pom.html#Dependency_Version_Requirement_Specification
+        if ("," in new_spec) or ("(" in new_spec) or (")" in new_spec):
+            continue
+        new_version = new_spec.strip("[]")
+        if not is_strict_ver(new_version):
+            continue
+
+        old_spec = old_deps.get(pkg)
+        if old_spec is None:
+            continue
+        if ("," in old_spec) or ("(" in old_spec) or (")" in old_spec):
+            continue
+        old_version = old_spec.strip("[]")
+        if not is_strict_ver(old_version):
+            continue
+
+        if new_version != old_version:
+            update_pairs.append((pkg, str(new_version), str(old_version)))
+    return update_pairs
+
+
 def filter(file_type: str, prefix: str):
     commits_path = os.path.join(prefix, "commits", f"{file_type}_commits.csv")
     dependency_path = os.path.join(prefix, "deps", f"{file_type}_dependencies.json")
@@ -58,6 +83,9 @@ def filter(file_type: str, prefix: str):
 
     commits_info["new deps"] = commits_info["new blob"].map(dependencies)
     commits_info["old deps"] = commits_info["old blob"].map(dependencies)
+    get_updates = get_updates_py
+    if file_type == "pom.xml":
+        get_updates = get_updates_java
     commits_info["update pairs"] = commits_info.parallel_apply(get_updates, axis=1)
     updates = commits_info[commits_info["update pairs"].str.len() > 0]
     print(f"\n{len(updates)} commits update dependencies in {file_type}")
