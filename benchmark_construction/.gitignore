@@ -1,3 +1,5 @@
 # Temporary files
 experiment.ipynb
 store_blobs.py
+*.csv
+memo
