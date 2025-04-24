@@ -78,3 +78,8 @@ python dep_update_commits.py -f pom.xml,requirements.txt,setup.cfg,pyproject.tom
 The results are stored as `<target file>_updates.csv` files in the `../benchmark/updates` folder. The csv file has the following fields: `commit`, `filepath`, `new blob`, `old blob`, and `update pairs`. The `update pairs` filed is a list where each element is a `(package name, version in new blob, version in old blob)` tuple.
 
 After obtaining the `<target file>_updates.csv` files, run the `dep_update_statistics.ipynb` Jupyter Notebook. It produces basic statistics displayed in the `../benchmark/README.md`. It also merge all `<target file>_updates.csv` files to the `../benchmark/updates/c2fpkgvvtype.csv` file.
+
+## Update Behavior Commits Extraction
+First run `nearby_commits.sh` to get the 2 commits before and after the dependency update commits, respectively. It produces the `c.pc.ppc.cc.ccc` file where the five columns corresponds to the dependency update commit, parent commits, parent commit's parent commit, child commit, child commit's child commit, respectively. Note that the `c` column includes all commits that modify the 5 kinds of dependency specification files.
+
+Then run `extract_blob.sh` to filter out the above commits that modify java files (with `.java` extension) or python files (with `.py` extension) and to extract blob shas before and after the commit. It produces `c2fbb` file consisting of 4 fields: `commit sha,filepath,new blob sha,old blob sha`. It also produces `javablob_{0..127}.idx` and `pyblob_{0..127}.idx` files that stores each Java or Python blob's offset and length in corresponding `blob_{0..127}.bin` files. These ".idx" files are for efficient blob content retrieval from very large ".bin" files.
