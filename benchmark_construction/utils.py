@@ -89,3 +89,73 @@ def list_pypi_packages(retry: int = 5) -> list[str] | None:
         logger.error(
             "Request Simple API successfully", f"retrying...{retry} times left"
         )
+
+
+# Non-GitHub platforms that WoC collects
+URL_PREFIXES = [
+    "gitlab.com",
+    "bitbucket.org",
+    "0xacab.org",
+    "android.googlesource.com",
+    "bioconductor.org",
+    "blitiri.com.ar",
+    "code.ill.fr",
+    "code.qt.io",
+    "drupal.com",
+    "fedorapeople.org",
+    "forgemia.inra.fr",
+    "framagit.org",
+    "gcc.git",
+    "git.alpinelinux.org",
+    "git.debian.org",
+    "git.eclipse.org",
+    "git.kernel.org",
+    "git.openembedded.org",
+    "git.pleroma.social",
+    "git.postgresql.org",
+    "git.savannah.gnu.org",
+    "git.savannah.nongnu.org",
+    "git.torproject.org",
+    "git.unicaen.fr",
+    "git.unistra.fr",
+    "git.xfce.org",
+    "git.yoctoproject.org",
+    "git.zx2c4.com",
+    "gitbox.apache.org",
+    "gite.lirmm.fr",
+    "gitlab.adullact.net",
+    "gitlab.cerema.fr",
+    "gitlab.common-lisp.net",
+    "gitlab.fing.edu.uy",
+    "gitlab.freedesktop.org",
+    "gitlab.gnome.org",
+    "gitlab.huma-num.fr",
+    "gitlab.inria.fr",
+    "gitlab.irstea.fr",
+    "gitlab.ow2.org",
+    "invent.kde.org",
+    "kde.org",
+    "notabug.org",
+    "pagure.io",
+    "repo.or.cz",
+    "salsa.debian.org",
+    "sourceforge.net",
+]
+
+
+def normalize_url(url: str) -> str:
+    """Normalize an url by lowercasing all characters and removing `/` and `.git` suffixes."""
+    url = url.lower().strip("/")
+    if url.endswith(".git"):
+        url = url[:-4]
+    return url
+
+
+def restore_url(woc_uri: str) -> str | None:
+    """Convert a woc uri to corresponsing GitHub repository URL"""
+    if woc_uri.count("_") < 1:
+        return
+    prefix = woc_uri.split("_", 1)[0]
+    if prefix not in URL_PREFIXES:
+        url = f"https://github.com/" + woc_uri.replace("_", "/", 1)
+        return normalize_url(url)
