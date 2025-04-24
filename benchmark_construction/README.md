@@ -7,7 +7,7 @@ Before you proceed, you should first setup the environment for this step by foll
 
 It has the following command line options:
 ```
-usage: python filter_commits.py [-h] [-f TARGET_FILES] [-d DESTINATION_FOLDER] [-n NUM_WORKERS] [-u]
+usage: python filter_commits.py [-h] [-f TARGET_FILES] [-s SERVER] [-v VER] [-n NUM_WORKERS] [-u]
 
 Query commits that modify specific files
 
@@ -15,18 +15,19 @@ options:
   -h, --help            show this help message and exit
   -f TARGET_FILES, --target_files TARGET_FILES
                         a list of filname separated by ,
-  -d DESTINATION_FOLDER, --destination_folder DESTINATION_FOLDER
-                        the folder to save query results
+  -s SERVER, --server SERVER
+                        the server that stores the c2fbb mapping files
+  -v VER, --ver VER     the version of c2fbb mappings
   -n NUM_WORKERS, --num_workers NUM_WORKERS
                         number of threads
-  -u, --update          update results
+  -u, --update          requery if specified
 ```
 
 Run the following command to query all commits that modify dependency configuration files in Java (`pom.xml`) and Python (`requirements.txt`, `setup.cfg`, `pyproject.toml`, `setup.py`) projects.
 ```shell
-python filter_commits.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -d <Folder to save query results> -n <Number of processes, recommended 8 on the world of code server>
+python filter_commits.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -s <default da7> -v <default V3> -n <Number of processes, default 1>
 ```
-The results are stored as `<target file>_commits.csv` files in the `commits` subfolder of destination folder. In our study, we specify `-d`'s argument as `benchmark`. The csv file contains the following fields: `commit`, `filepath`, `new blob`, `old blob`, and `project`.
+The results are stored as `<target file>_commits.csv` files in the `../benchmark/commits` folder. The csv file contains the following fields: `commit`, `filepath`, `new blob`, `old blob`, and `project`.
 
 ## Dependency Parsing
 `parser.py` parses dependencies declared in the collected dependency configuration files. It takes as input the csv files obtained in the previous step, gets all unique blob shas (including both `new blob` and `old blob`), and parse dependencies in each blob.

@@ -5,80 +5,7 @@ import string
 import pandas as pd
 from joblib import Parallel, delayed
 
-c2fbb_base_path = "/da7_data/basemaps/gz/c2fbbFull.V3.{id}.s"
-c2P_base_path = "/da7_data/basemaps/gz/c2PFull.V3.{id}.s"
-
-# Non-GitHub platforms that WoC collects
-URL_PREFIXES = [
-    "gitlab.com",
-    "bitbucket.org",
-    "0xacab.org",
-    "android.googlesource.com",
-    "bioconductor.org",
-    "blitiri.com.ar",
-    "code.ill.fr",
-    "code.qt.io",
-    "drupal.com",
-    "fedorapeople.org",
-    "forgemia.inra.fr",
-    "framagit.org",
-    "gcc.git",
-    "git.alpinelinux.org",
-    "git.debian.org",
-    "git.eclipse.org",
-    "git.kernel.org",
-    "git.openembedded.org",
-    "git.pleroma.social",
-    "git.postgresql.org",
-    "git.savannah.gnu.org",
-    "git.savannah.nongnu.org",
-    "git.torproject.org",
-    "git.unicaen.fr",
-    "git.unistra.fr",
-    "git.xfce.org",
-    "git.yoctoproject.org",
-    "git.zx2c4.com",
-    "gitbox.apache.org",
-    "gite.lirmm.fr",
-    "gitlab.adullact.net",
-    "gitlab.cerema.fr",
-    "gitlab.common-lisp.net",
-    "gitlab.fing.edu.uy",
-    "gitlab.freedesktop.org",
-    "gitlab.gnome.org",
-    "gitlab.huma-num.fr",
-    "gitlab.inria.fr",
-    "gitlab.irstea.fr",
-    "gitlab.ow2.org",
-    "invent.kde.org",
-    "kde.org",
-    "notabug.org",
-    "pagure.io",
-    "repo.or.cz",
-    "salsa.debian.org",
-    "sourceforge.net",
-]
-
-
-def normalize_url(url: str) -> str:
-    """Normalize an url by lowercasing all characters and removing `/` and `.git` suffixes."""
-    url = url.lower().strip("/")
-    if url.endswith(".git"):
-        url = url[:-4]
-    return url
-
-
-def restore_url(woc_uri: str) -> str | None:
-    """Convert a woc uri to corresponsing GitHub repository URL"""
-    if woc_uri.count("_") < 1:
-        return
-    prefix = woc_uri.split("_", 1)[0]
-    if prefix not in URL_PREFIXES:
-        url = f"https://github.com/" + woc_uri.replace("_", "/", 1)
-        return normalize_url(url)
-
-
-Record = tuple[str, str, str, str, str]
+c2fbb_base_path = "/{server}_data/basemaps/gz/c2fbbFull.{ver}."
 
 
 def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> None:
@@ -91,25 +18,10 @@ def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> N
     target_files : list[str]
         a list of file names to query
     save_folder : str
-        the folder the save query results for each file
+        the folder to save query results for each target file
     """
     results = {f: [] for f in target_files}
-    c2fbb_path = c2fbb_base_path.format(id=i)
-    c2P_path = c2P_base_path.format(id=i)
-
-    commit_proj = {}
-    err_line = 0
-    with gzip.open(c2P_path) as inf:
-        for line in inf:
-            try:
-                line = line.decode(encoding="utf-8")
-                entries = line.strip("\n").split(";")
-                # If there are multiple projects, we only keep the first one
-                commit, proj = entries[0], entries[1]
-                commit_proj[commit] = proj
-            except:
-                err_line += 1
-    print(f"{len(commit_proj)} commits in {c2P_path}, {err_line} error line(s)")
+    c2fbb_path = c2fbb_base_path + f"{i}.s"
 
     err_line = 0
     with gzip.open(c2fbb_path) as inf:
@@ -126,11 +38,7 @@ def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> N
                 filename = os.path.basename(filepath)
                 if filename not in target_files:
                     continue
-                proj = restore_url(commit_proj.get(commit, ""))
-                if proj:
-                    results[filename].append(
-                        (commit, filepath, new_blob, old_blob, proj)
-                    )
+                results[filename].append((commit, filepath, new_blob, old_blob))
             except:
                 err_line += 1
 
@@ -140,10 +48,10 @@ def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> N
     )
     os.makedirs(os.path.join(save_folder, "commits"), exist_ok=True)
     for fn, data in results.items():
-        save_path = os.path.join(save_folder, f"commits/{fn}_commits.csv.{i}")
+        save_path = os.path.join(save_folder, "commits", f"{fn}_commits.csv")
         df = pd.DataFrame(
             data,
-            columns=["commit", "filepath", "new blob", "old blob", "project"],
+            columns=["commit", "filepath", "new blob", "old blob"],
         )
         df.to_csv(save_path, index=False)
 
@@ -162,7 +70,6 @@ def valid_sha_value(row):
 
 def main(
     target_files: list[str],
-    save_folder: str,
     num_workers: int = 1,
     update: bool = False,
 ) -> None:
@@ -172,21 +79,19 @@ def main(
     ----------
     target_files : list[str]
         a list of file names to query
-    save_folder : str
-        the folder to save the results
     num_workers : int, optional
         the number of processes, by default 1
     update : bool, optional
         whether to perform update, by default False
     """
-
+    save_folder = "../benchmark"
     remaining_target_files = []
     # When `update` is set to False, we only process filenames whose result file does not exist
     # Else, we process all filenames
     os.makedirs(os.path.join(save_folder, "commits"), exist_ok=True)
     if not update:
         for fn in target_files:
-            save_path = os.path.join(save_folder, f"commits/{fn}_commits.csv")
+            save_path = os.path.join(save_folder, "commits", f"{fn}_commits.csv")
             if os.path.exists(save_path):
                 continue
             remaining_target_files.append(fn)
@@ -199,7 +104,7 @@ def main(
     )
 
     for fn in remaining_target_files:
-        save_path = os.path.join(save_folder, f"commits/{fn}_commits.csv")
+        save_path = os.path.join(save_folder, "commits", f"{fn}_commits.csv")
         data = []
         for i in range(128):
             df = pd.read_csv(f"{save_path}.{i}")
@@ -225,19 +130,31 @@ if __name__ == "__main__":
         help="a list of filname separated by ,",
     )
     parser.add_argument(
-        "-d",
-        "--destination_folder",
+        "-s",
+        "--server",
+        default="da7",
         type=str,
-        help="the folder to save query results",
+        help="the server that stores the c2fbb mapping files",
+    )
+    parser.add_argument(
+        "-v",
+        "--ver",
+        default="V3",
+        type=str,
+        help="the version of c2fbb mappings",
     )
     parser.add_argument(
         "-n", "--num_workers", type=int, default=1, help="number of threads"
     )
-    parser.add_argument("-u", "--update", action="store_true", help="update results")
+    parser.add_argument(
+        "-u", "--update", action="store_true", help="requery if specified"
+    )
 
     args = parser.parse_args()
+
+    c2fbb_base_path = c2fbb_base_path.format(server=args.server, ver=args.ver)
 
     if args.target_files:
         target_files = args.target_files.split(",")
         print(target_files)
-        main(target_files, args.destination_folder, args.num_workers, args.update)
+        main(target_files, args.num_workers, args.update)
