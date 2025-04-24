@@ -87,13 +87,13 @@ def get_updates_java(row):
     return update_pairs.strip(";")
 
 
-def filter(file_type: str, prefix: str):
+def filter(file_type: str):
     get_updates = get_updates_py
     ALL_PACKAGES = PYPI_PACKAGES
     if file_type == "pom.xml":
         get_updates = get_updates_java
         ALL_PACKAGES = MAVEN_PACKAGES
-
+    prefix = "../benchmark"
     commits_path = os.path.join(prefix, "commits", f"{file_type}_commits.csv")
     dependency_path = os.path.join(prefix, "deps", f"{file_type}_dependencies.json")
 
@@ -157,15 +157,7 @@ if __name__ == "__main__":
         prog="python dep_update_commits.py",
         description="Obtain commits that update dependencies in the dependency configuration file",
     )
-    parser.add_argument(
-        "-t", "--configuration_file_type", help="type of configuration file"
-    )
-    parser.add_argument(
-        "-d",
-        "--directory",
-        type=str,
-        help="the directory to read commits and save results",
-    )
+    parser.add_argument("-f", "--target_files", help="a list of filname separated by ,")
     parser.add_argument(
         "-n", "--num_workers", type=int, default=1, help="number of threads"
     )
@@ -173,9 +165,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     pandarallel.initialize(nb_workers=args.num_workers, progress_bar=True)
 
-    cft = args.configuration_file_type
-    if cft == "all":
-        for cfg in CONFIG_TYPES:
-            filter(cfg, args.directory)
-    elif cft in CONFIG_TYPES:
-        filter(cft, args.directory)
+    target_files = args.target_files.split(",")
+    print(target_files)
+
+    for f in target_files:
+        if f not in CONFIG_TYPES:
+            print(f"{f} is not supported")
+            continue
+        filter(f)

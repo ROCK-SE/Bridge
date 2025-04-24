@@ -59,23 +59,20 @@ The results are stored as `<target file>_dependencies.json` files in the `../ben
 
 It has the following command line options:
 ```
-usage: python dep_update_commits.py [-h] [-t CONFIGURATION_FILE_TYPE] [-d DIRECTORY] [-n NUM_WORKERS]
+usage: python dep_update_commits.py [-h] [-f TARGET_FILES] [-n NUM_WORKERS]
 
 Obtain commits that update dependencies in the dependency configuration file
 
 options:
   -h, --help            show this help message and exit
-  -t CONFIGURATION_FILE_TYPE, --configuration_file_type CONFIGURATION_FILE_TYPE
-                        type of configuration file
-  -d DIRECTORY, --directory DIRECTORY
-                        the directory to read commits and save results
+  -f TARGET_FILES, --target_files TARGET_FILES
+                        a list of filname separated by ,
   -n NUM_WORKERS, --num_workers NUM_WORKERS
                         number of threads
 ```
 
 Run the following command to parse all dependency configuration files collected in the above step.
 ```shell
-# `all` indicates all types of dependency configuration files. You can also specify pom.xml, setup.cfg, pyproject.toml, requirements.txt, setup.py as the argument.
-python dep_update_commits.py -t all -d <Folder to save query results> -n <Number of processes>
+python dep_update_commits.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -n <Number of processes, default 1>
 ```
-The results are stored as `<target file>_updates.csv` files in the `updates` subfolder of destination folder. In our study, we specify `-d`'s argument as `benchmark`. The csv file has the following fields: `commit`, `filepath`, `new blob`, `old blob`, and `update pairs`. The `update pairs` filed is a list where each element is a `(package name, version in new blob, version in old blob)` tuple.
+The results are stored as `<target file>_updates.csv` files in the `../benchmark/updates` folder. The csv file has the following fields: `commit`, `filepath`, `new blob`, `old blob`, and `update pairs`. The `update pairs` filed is a list where each element is a `(package name, version in new blob, version in old blob)` tuple.
