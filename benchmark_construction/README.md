@@ -34,16 +34,14 @@ The results are stored as `<target file>_commits.csv` files in the `../benchmark
 
 It has the following command line options:
 ```
-usage: python parser.py [-h] [-t CONFIGURATION_FILE_TYPE] [-d DIRECTORY] [-n NUM_WORKERS] [-b BATCH_SIZE]
+usage: python parser.py [-h] [-f TARGET_FILES] [-n NUM_WORKERS] [-b BATCH_SIZE]
 
 Parse configuration blobs to extract dependencies
 
 options:
   -h, --help            show this help message and exit
-  -t CONFIGURATION_FILE_TYPE, --configuration_file_type CONFIGURATION_FILE_TYPE
-                        type of configuration file
-  -d DIRECTORY, --directory DIRECTORY
-                        the directory to read commits and save results
+  -f TARGET_FILES, --target_files TARGET_FILES
+                        a list of filname separated by ,
   -n NUM_WORKERS, --num_workers NUM_WORKERS
                         number of threads
   -b BATCH_SIZE, --batch_size BATCH_SIZE
@@ -52,10 +50,9 @@ options:
 
 Run the following command to parse all dependency configuration files collected in the above step.
 ```shell
-# `all` indicates all types of dependency configuration files. You can also specify pom.xml, setup.cfg, pyproject.toml, requirements.txt, setup.py as the argument.
-python parser.py -t all -d <Folder to save query results> -n <Number of processes, recommended 4> -b <Number of blobs in a batch>
+python parser.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -n <Number of processes, default 1> -b <Number of blobs in a batch, default 1>
 ```
-The results are stored as `<target file>_dependencies.json` files in the `deps` subfolder of destination folder. In our study, we specify `-d`'s argument as `benchmark`. The json file has the following diagram: `{blob sha: {package name: version constraints}}`.
+The results are stored as `<target file>_dependencies.json` files in the `../benchmark/deps` folder. The json file has the following diagram: `{blob sha: {package name: version constraints}}`.
 
 ## Version Update Extraction
 `dep_update_commits.py` filters out commits that perform dependency version update.

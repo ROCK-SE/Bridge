@@ -53,17 +53,15 @@ def single_process(
             outf.write(f"{b}\n")
 
 
-def main(
-    configuration_file_type: str, directory: str, num_workers: int, batch_size: int
-):
+def main(configuration_file_type: str, num_workers: int, batch_size: int):
     print(f"{configuration_file_type}: ")
     source_path = os.path.join(
-        directory, "commits", f"{configuration_file_type}_commits.csv"
+        "../benchmark", "commits", f"{configuration_file_type}_commits.csv"
     )
     save_path = os.path.join(
-        directory, "deps", f"{configuration_file_type}_dependencies"
+        "../benchmark", "deps", f"{configuration_file_type}_dependencies"
     )
-    os.makedirs(os.path.join(directory, "deps"), exist_ok=True)
+    os.makedirs(os.path.join("../benchmark", "deps"), exist_ok=True)
 
     df = pd.read_csv(source_path, keep_default_na=False, low_memory=False)
     blob_shas = list(set(list(df["new blob"]) + list(df["old blob"])))
@@ -105,15 +103,7 @@ if __name__ == "__main__":
         prog="python parser.py",
         description="Parse configuration blobs to extract dependencies",
     )
-    parser.add_argument(
-        "-t", "--configuration_file_type", help="type of configuration file"
-    )
-    parser.add_argument(
-        "-d",
-        "--directory",
-        type=str,
-        help="the directory to read commits and save results",
-    )
+    parser.add_argument("-f", "--target_files", help="a list of filname separated by ,")
     parser.add_argument(
         "-n", "--num_workers", type=int, default=1, help="number of threads"
     )
@@ -126,21 +116,15 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    target_files = args.target_files.split(",")
+    print(target_files)
 
-    cft = args.configuration_file_type
-    if cft == "all":
-        for t in PARSERS.keys():
-            main(
-                t,
-                args.directory,
-                args.num_workers,
-                args.batch_size,
-            )
-
-    elif cft in PARSERS:
+    for f in target_files:
+        if f not in PARSERS:
+            print(f"{f} is not supported")
+            continue
         main(
-            cft,
-            args.directory,
+            f,
             args.num_workers,
             args.batch_size,
         )
