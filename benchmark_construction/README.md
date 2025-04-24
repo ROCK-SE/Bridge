@@ -76,3 +76,5 @@ Run the following command to parse all dependency configuration files collected 
 python dep_update_commits.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -n <Number of processes, default 1>
 ```
 The results are stored as `<target file>_updates.csv` files in the `../benchmark/updates` folder. The csv file has the following fields: `commit`, `filepath`, `new blob`, `old blob`, and `update pairs`. The `update pairs` filed is a list where each element is a `(package name, version in new blob, version in old blob)` tuple.
+
+After obtaining the `<target file>_updates.csv` files, run the `dep_update_statistics.ipynb` Jupyter Notebook. It produces basic statistics displayed in the `../benchmark/README.md`. It also merge all `<target file>_updates.csv` files to the `../benchmark/updates/c2fpkgvvtype.csv` file.
