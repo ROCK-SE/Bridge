@@ -8,6 +8,7 @@ import time
 import pandas as pd
 import requests
 from joblib import Parallel, delayed
+from packaging.utils import canonicalize_name
 from tqdm import tqdm
 
 DEPS_DEV_ENDPOINT = "https://api.deps.dev/v3/systems/maven/packages/{name}"
@@ -204,6 +205,14 @@ def query_all(n_jobs: int, batch_size: int):
         json.dump(py_releases, outf)
 
 
+def canonic_names():
+    result = {}
+    for k, v in json.load(open("../benchmark/updates/pypi_releases.json")).items():
+        result[canonicalize_name(k)] = v
+    with open("../benchmark/updates/pypi_releases.json", "w") as outf:
+        json.dump(result, outf)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="python query_deps_dev.py",
@@ -221,3 +230,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     get_unique_packages()
     query_all(args.n_jobs, args.batch_size)
+    canonic_names()
