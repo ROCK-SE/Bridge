@@ -159,3 +159,12 @@ def restore_url(woc_uri: str) -> str | None:
     if prefix not in URL_PREFIXES:
         url = f"https://github.com/" + woc_uri.replace("_", "/", 1)
         return normalize_url(url)
+
+
+def is_strict_ver(identifier: str):
+    parts = identifier.split(".")
+    if len(parts) > 3:
+        return False
+    if all(p.isnumeric() for p in parts):
+        return True
+    return False
