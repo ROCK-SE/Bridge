@@ -1,4 +1,6 @@
 import logging
+import os
+import urllib.request
 
 import requests
 from packaging.requirements import InvalidRequirement, Requirement
@@ -168,3 +170,24 @@ def is_strict_ver(identifier: str):
     if all(p.isnumeric() for p in parts):
         return True
     return False
+
+
+def download(
+    url: str, save_path: str, check: bool = True, size: int = -1, max_try=3
+) -> bool:
+    if check and os.path.exists(save_path) and (os.path.getsize(save_path) == size):
+        return True
+
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    success = False
+    i = 0
+
+    while (not success) and (i < max_try):
+        try:
+            urllib.request.urlretrieve(url, save_path)
+            success = True
+        except Exception as e:
+            i += 1
+            logger.error(f"Error downloading {url}, retry {i}: {e}")
+
+    return success
