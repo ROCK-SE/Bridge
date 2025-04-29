@@ -5,7 +5,6 @@ import os
 import random
 import time
 
-import pandas as pd
 import requests
 from joblib import Parallel, delayed
 from packaging.utils import canonicalize_name
@@ -31,47 +30,6 @@ except:
     config = {}
 
 
-def get_unique_packages():
-    df = pd.read_csv(
-        "../benchmark/updates/c2fpkgvvtype.csv", low_memory=False, keep_default_na=False
-    )
-    df.head()
-    py_info = df[df["config file"] != "pom.xml"][
-        ["package", "version before", "version after"]
-    ]
-    java_info = df[df["config file"] == "pom.xml"][
-        ["package", "version before", "version after"]
-    ]
-    py_pkgs = pd.concat(
-        [
-            py_info[["package", "version before"]].rename(
-                columns={"version before": "version"}
-            ),
-            py_info[["package", "version after"]].rename(
-                columns={"version after": "version"}
-            ),
-        ]
-    ).drop_duplicates()
-    print(f"Python: {py_pkgs['package'].nunique()} packages, {len(py_pkgs)} releases")
-    java_pkgs = pd.concat(
-        [
-            java_info[["package", "version before"]].rename(
-                columns={"version before": "version"}
-            ),
-            java_info[["package", "version after"]].rename(
-                columns={"version after": "version"}
-            ),
-        ]
-    ).drop_duplicates()
-    print(
-        f"Java:   {java_pkgs['package'].nunique()} packages, {len(java_pkgs)} releases"
-    )
-    py_pkgs.to_csv("../benchmark/updates/py_packages.csv", header=False, index=False)
-    java_pkgs.to_csv(
-        "../benchmark/updates/java_packages.csv", header=False, index=False
-    )
-
-
 def my_get(
     url: str,
     session: requests.Session | None = None,
@@ -89,6 +47,61 @@ def my_get(
         return None
 
 
+def wheel_preference(filename: str):
+    """Determine the perference of each wheel with the following rules:
+    - wheel distribution for linux platform first
+    - py > cp > other Python implementations
+    - highest version
+    Return a tuple with the following elements:
+    # platform: linux: 2, macos: 1, others: 0
+    # py_impl: py: 2, cp: 1, others: 0
+    # py_major_ver: default 0
+    # py_minor_ver: default 0
+    """
+
+    platform, py_impl, py_major_ver, py_minor_ver = 0, 0, 0, 0
+
+    parts = filename.split("-")
+    version = parts[1]
+    if len(parts) < 5 or len(parts) > 6:
+        return version, (platform, py_impl, py_major_ver, py_minor_ver)
+
+    elif len(parts) == 5:
+        python_tag, platform_tag = parts[2], parts[4]
+    elif len(parts) == 6:
+        python_tag, platform_tag = parts[3], parts[5]
+
+    # determine value of platform info
+    if "any" in platform_tag or "linux" in platform_tag:
+        platform = 2
+    elif "macos" in platform_tag:
+        platform = 1
+
+    # reference: https://packaging.python.org/en/latest/specifications/platform-compatibility-tags/
+    python_tag = python_tag.split(".")[-1]
+    python_tag = "".join([c for c in python_tag if c.isalnum()])
+
+    # determine value of py_impl info
+    impl = ""
+    for i, c in enumerate(python_tag):
+        if not c.isalpha():
+            break
+        impl += c
+    if impl == "py":
+        py_impl = 2
+    elif impl == "cp":
+        py_impl = 1
+
+    # determine value of py_major_ver, py_minor_ver
+    try:
+        py_major_ver = int(python_tag[i])
+        py_minor_ver = int(python_tag[i + 1 :])
+    except:
+        pass
+
+    return version, (platform, py_impl, py_major_ver, py_minor_ver)
+
+
 def single_query(system: str, name: str, session: requests.Session | None = None):
     if system == "maven":
         url = DEPS_DEV_ENDPOINT.format(name=name)
@@ -100,11 +113,40 @@ def single_query(system: str, name: str, session: requests.Session | None = None
         return None
     if resp.status_code == requests.codes.ok:
         if system == "maven":
-            return [ver["versionKey"]["version"] for ver in resp.json()["versions"]]
-        if system == "pypi":
-            return [v for v in resp.json()["versions"]]
+            result = []
+            for ver in resp.json()["versions"]:
+                ver_id = ver["versionKey"]["version"]
+                published_at = ver.get("publishedAt", "2025-01-01")
+                if published_at < "2024-06-01":
+                    result.append(ver_id)
+            return result
+        elif system == "pypi":
+            data = resp.json()
+            files = data["files"]
+            result = {}
+            for f in files:
+                upload_time = f["upload-time"]
+                if upload_time >= "2024-06-01":
+                    continue
+                filename = f["filename"]
+                if not filename.endswith(".whl"):
+                    continue
+                try:
+                    url = f["url"]
+                    filename = url.split("/")[-1]
+                    v, preference = wheel_preference(url)
+                    result[v] = result.get(v, (url, preference))
+                    if preference >= result[v][1]:
+                        result[v] = (url, preference)
+                except:
+                    pass
+            return {k: v[0] for k, v in result.items()}
+
     if resp.status_code == requests.codes.not_found:
-        return []
+        if system == "maven":
+            return []
+        if system == "pypi":
+            return {}
     else:
         return None
 
@@ -215,8 +257,8 @@ def canonic_names():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="python query_deps_dev.py",
-        description="Query Deps.dev API to obtain all versions of Java/Python packages",
+        prog="python query_package_versions.py",
+        description="Query Deps.dev API and PyPI API to obtain all versions of updated Java/Python packages",
     )
     parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
     parser.add_argument(
@@ -228,6 +270,5 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    get_unique_packages()
     query_all(args.n_jobs, args.batch_size)
     canonic_names()
