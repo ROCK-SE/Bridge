@@ -5,6 +5,7 @@ import os
 import random
 import time
 
+import pandas as pd
 import requests
 from joblib import Parallel, delayed
 from packaging.utils import canonicalize_name
@@ -28,6 +29,46 @@ try:
         config = json.load(inf)
 except:
     config = {}
+
+
+def get_unique_packages():
+    df = pd.read_csv(
+        "../benchmark/updates/c2fpkgvvtype.csv", low_memory=False, keep_default_na=False
+    )
+    py_info = df[df["config file"] != "pom.xml"][
+        ["package", "version before", "version after"]
+    ]
+    java_info = df[df["config file"] == "pom.xml"][
+        ["package", "version before", "version after"]
+    ]
+    py_pkgs = pd.concat(
+        [
+            py_info[["package", "version before"]].rename(
+                columns={"version before": "version"}
+            ),
+            py_info[["package", "version after"]].rename(
+                columns={"version after": "version"}
+            ),
+        ]
+    ).drop_duplicates()
+    print(f"Python: {py_pkgs['package'].nunique()} packages, {len(py_pkgs)} releases")
+    java_pkgs = pd.concat(
+        [
+            java_info[["package", "version before"]].rename(
+                columns={"version before": "version"}
+            ),
+            java_info[["package", "version after"]].rename(
+                columns={"version after": "version"}
+            ),
+        ]
+    ).drop_duplicates()
+    print(
+        f"Java:   {java_pkgs['package'].nunique()} packages, {len(java_pkgs)} releases"
+    )
+    py_pkgs.to_csv("../benchmark/updates/py_packages.csv", header=False, index=False)
+    java_pkgs.to_csv(
+        "../benchmark/updates/java_packages.csv", header=False, index=False
+    )
 
 
 def my_get(
@@ -270,5 +311,6 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    get_unique_packages()
     query_all(args.n_jobs, args.batch_size)
     canonic_names()

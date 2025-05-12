@@ -9,7 +9,6 @@ import zipfile
 
 import pandas as pd
 from joblib import Parallel, delayed
-from pandarallel import pandarallel
 from tqdm import tqdm
 from utils import download, is_strict_ver
 
@@ -246,19 +245,25 @@ def extract(dest_folder: str, lang: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="python download_packages.py",
-        description="Download wheel/jar file of the latest release for each updated Python package / Java library",
+        prog="python extract_import_prefixes.py",
+        description="Download wheel/jar file of the latest release for each updated Python package / Java library and extract import names",
     )
     parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
     parser.add_argument("-d", "--dest_folder", required=True, type=str)
-    parser.add_argument("--python", action="store_true")
-    parser.add_argument("--java", action="store_true")
-    parser.add_argument("--extract", action="store_true")
+    parser.add_argument(
+        "--python", action="store_true", help="download Python package wheels"
+    )
+    parser.add_argument(
+        "--java", action="store_true", help="download Java package jars"
+    )
+    parser.add_argument("--extract", action="store_true", help="extract import names")
 
     args = parser.parse_args()
     if args.python:
         download_python_packages(args.n_jobs, args.dest_folder)
+        if args.extract:
+            extract(args.dest_folder, "py")
     if args.java:
         download_java_packages(args.n_jobs, args.dest_folder)
-    if args.extract:
-        extract(args.dest_folder, "java")
+        if args.extract:
+            extract(args.dest_folder, "java")
