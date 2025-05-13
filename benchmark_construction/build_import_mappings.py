@@ -245,8 +245,8 @@ def extract(dest_folder: str, lang: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="python extract_import_prefixes.py",
-        description="Download wheel/jar file of the latest release for each updated Python package / Java library and extract import names",
+        prog="python build_import_mappings.py",
+        description="Download wheel/jar file of the latest release for each updated Python package / Java library and build import mappings",
     )
     parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
     parser.add_argument("-d", "--dest_folder", required=True, type=str)

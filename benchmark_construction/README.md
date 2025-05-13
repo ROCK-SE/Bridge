@@ -85,7 +85,7 @@ First run `nearby_commits.sh` to get the 2 commits before and after the dependen
 Then run `extract_blob.sh` to filter out the above commits that modify java files (with `.java` extension) or python files (with `.py` extension) and to extract blob shas before and after the commit. It produces `c2fbb` file consisting of 4 fields: `commit sha,filepath,new blob sha,old blob sha`. It also produces `javablob_{0..127}.idx` and `pyblob_{0..127}.idx` files that stores each Java or Python blob's offset and length in corresponding `blob_{0..127}.bin` files. These ".idx" files are for efficient blob content retrieval from very large ".bin" files.
 
 
-# Construct Import Name Database
+# Build Import Mappings
 `query_package_versions.py` obtains all versions released before 2024-06-01 for each updated Java/Python packages. The Java package release information is obtained via the [deps.dev API](https://docs.deps.dev/api/v3/), while the Python package release information is obtained via [PyPI Index API](https://docs.pypi.org/api/index-api/#json_1). It has the following command line options:
 ```
 usage: python query_package_versions.py [-h] [-n N_JOBS] [-b BATCH_SIZE]
@@ -106,9 +106,9 @@ python query_package_versions.py -n <Number of processes, default 1> -b <Number 
 ```
 The results are store as `maven_releases.json` and `pypi_releases.json` in the `../benchmark/updates` folder for Java packages and Python packages, respectively. The `maven_releases.json` file has the following schema: `packsage name: [versions]`. The `pypi_releases.json` file has the following schema: `packsage name: {version: distribution file url}`.
 
-Then `extract_import_prefixes.py` downloads the jar/wheel file for the latest release of each updated Java/Python package and extracts import names for each Java/Python package. Here, we assume that the import names of each Java/Python package are consistent across releases to reduce the network workload. It has the following command line options:
+Then `build_import_mappings.py` downloads the jar/wheel file for the latest release of each updated Java/Python package and extracts import names for each Java/Python package. Here, we assume that the import names of each Java/Python package are consistent across releases to reduce the network workload. It has the following command line options:
 ```shell
-usage: python extract_import_prefixes.py [-h] [-n N_JOBS] -d DEST_FOLDER [--python] [--java] [--extract]
+usage: python build_import_mappings.py [-h] [-n N_JOBS] -d DEST_FOLDER [--python] [--java] [--extract]
 
 Download wheel/jar file of the latest release for each updated Python package / Java library and extract import names
 
@@ -123,6 +123,6 @@ options:
 ```
 Run the following command to construct the import name database:
 ```shell
-python extract_import_prefixes.py -d <DEST_FOLDER> --python --java --extract -n <N_JOBS>
+python build_import_mappings.py -d <DEST_FOLDER> --python --java --extract -n <N_JOBS>
 ```
 It takes approximately 96G to store the Java package jars and Python package wheels. So please ensure that the <DEST_FOLDER> has sufficient spaces. The results are stored as `py_imports.json` and `java_imports.json` in the `../benchmark/updates` folder. They share the same schema: `package name: [import names]`.
