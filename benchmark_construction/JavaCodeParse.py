@@ -144,11 +144,14 @@ def traverse_ast(tree, class_list, import_map, package_version_map):
                 if child.type == 'variable_declarator':
                     # 获取局部变量的类型
                     var_type = node.child_by_field_name('type').text.decode('utf-8')
+                    # 处理泛型类型，提取原始类型名（例如：从 "Jws<Claims>" 中提取 "Jws"）
+                    raw_type = var_type.split('<')[0] if '<' in var_type else var_type
                     # 获取局部变量的名称
-                    var_name = child.child_by_field_name('name').text.decode('utf-8')
-                    if var_type in class_list:
-                        # 将局部变量名和类型存入符号表
-                        variable_type_map[var_name] = var_type
+                    var_name = child.child_by_field_name('name').text.decode('utf-8')  
+                    # 检查原始类型名是否在class_list中
+                    if raw_type in class_list:
+                        # 将局部变量名和原始类型存入符号表
+                        variable_type_map[var_name] = raw_type
             # 递归遍历当前局部变量声明节点的子节点
             traverse_children(node, current_method)
         # 如果当前节点是方法调用
@@ -161,6 +164,9 @@ def traverse_ast(tree, class_list, import_map, package_version_map):
                     var_name = scope.text.decode('utf-8')
                     # 从符号表中获取变量的类型
                     var_type = variable_type_map.get(var_name)
+                    if not var_type: # 处理类名直接调用的情况
+                        var_type = var_name
+                    
                     if var_type and var_type in class_list:
                         # 获取调用的方法名
                         method_name = node.child_by_field_name('name').text.decode('utf-8')
@@ -175,6 +181,7 @@ def traverse_ast(tree, class_list, import_map, package_version_map):
                         # 记录 API 调用位置信息
                         record_api_location(full_class_name, method_name, node, current_method, 
                                             api_locations, var_name, version)
+                
             # 递归遍历当前方法调用节点的子节点
             traverse_children(node, current_method)
         else:
@@ -282,9 +289,9 @@ def main():
     程序入口函数，设置 Java 代码文件路径和 JSON 文件路径，调用相关函数进行分析，并打印结果。
     """
     # JSON 文件的路径，包含依赖信息
-    json_file_path = 'D:\\JavaParser\\ParserTest\\src\\main\\java\\edu\\ustb\\data\\dep.json'
+    json_file_path = 'D:\\tree-sitter\\parser\\data\\dep.json'
     # Java 文件的路径，待解析的 Java 代码
-    java_file_path = 'D:\\JavaParser\\ParserTest\\src\\main\\java\\edu\\ustb\\parser\\api\DependencyASTParser.java'
+    java_file_path = 'D:\\tree-sitter\\parser\\data\\Jwt2.java'
 
     # 解析 JSON 文件，获取依赖项映射和包版本映射
     result_map, package_version_map = load_from_json(json_file_path)
