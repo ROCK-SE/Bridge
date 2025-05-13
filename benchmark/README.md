@@ -24,3 +24,10 @@ The following table presents the number of different types of update based on th
 | setup.py           | 60,605(16.54%)     | 128,781(35.14%)   | 94,377(25.75%)    | 82,724(22.57%)    | 366,487    |
 | requirements.txt   | 2,934,473(21.78%)  | 5,699,163(42.30%) | 3,242,361(24.06%) | 1,597,777(11.86%) | 13,473,774 |
 | pom.xml            | 1,802,688 (11.77%) | 6,744,627(44.04%) | 6,208,775(40.64%) | 558,029(3.6%)     | 15,314,119 |
+
+The following table presents the information of Java/Python packages in the benchmark construction process.
+
+|        | #Packages | #Releases | #Downloaded | #Import |
+| ------ | --------- | --------- | ----------- | ------- |
+| Java   | 67,923    | 1,105,308 | 61,498      | 57,758  |
+| Python | 34,391    | 376,039   | 25,655      | 25,511  |

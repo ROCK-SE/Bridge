@@ -4,7 +4,7 @@ import os
 
 import pandas as pd
 from pandarallel import pandarallel
-from utils import list_pypi_packages
+from utils import is_strict_ver, list_pypi_packages
 
 CONFIG_TYPES = [
     "setup.cfg",
@@ -27,15 +27,6 @@ else:
         "Use the following SQL query and save the results to maven_packages.csv:\n"
         'SELECT DISTINCT Name FROM `bigquery-public-data.deps_dev_v1.PackageVersions` WHERE System = "MAVEN"',
     )
-
-
-def is_strict_ver(identifier: str):
-    parts = identifier.split(".")
-    if len(parts) > 3:
-        return False
-    if all(p.isnumeric() for p in parts):
-        return True
-    return False
 
 
 def get_updates_py(row):
