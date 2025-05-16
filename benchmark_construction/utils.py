@@ -1,8 +1,10 @@
+import json
 import logging
 import os
 import urllib.request
 
 import requests
+from bs4 import BeautifulSoup
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 from woc.local import WocMapsLocal
@@ -191,3 +193,108 @@ def download(
             logger.error(f"Error downloading {url}, retry {i}: {e}")
 
     return success
+
+
+def format_sexpression(s, indent_level=0, indent_size=4):
+    """ChatGPT + TACIXAT"""
+    output = ""
+    i = 0
+    # Initialize to False to avoid newline for the first token
+    need_newline = False
+    cdepth = []  # Track colons
+    while i < len(s):
+        if s[i] == "(":
+            output += "\n" + " " * (indent_level * indent_size) + "("
+            indent_level += 1
+            need_newline = False  # Avoid newline after opening parenthesis
+        elif s[i] == ":":
+            indent_level += 1
+            cdepth.append(indent_level)  # Store depth where we saw colon
+            output += ":"
+        elif s[i] == ")":
+            indent_level -= 1
+            if len(cdepth) > 0 and indent_level == cdepth[-1]:
+                # Unindent when we return to the depth we saw the last colon
+                cdepth.pop()
+                indent_level -= 1
+            output += ")"
+            need_newline = True  # Newline needed after closing parenthesis
+        elif s[i] == " ":
+            output += " "
+        else:
+            j = i
+            while j < len(s) and s[j] not in ["(", ")", " ", ":"]:
+                j += 1
+            # Add newline and indentation only when needed
+            if need_newline:
+                output += "\n" + " " * (indent_level * indent_size)
+            output += s[i:j]
+            i = j - 1
+            need_newline = True  # Next token should start on a new line
+        i += 1
+    return output
+
+
+def _construct_filters():
+    filters = {}
+    filters[6] = dict(name="font", attrs={"class": "FrameItemFont"})
+    for i in range(7, 11):
+        filters[i] = dict(name="ul", attrs={"title": "Packages"})
+    for i in range(11, 15):
+        filters[i] = {"name": "th", "attrs": {"class": "colFirst", "scope": "row"}}
+    filters[15] = dict(name="th", attrs={"class": "col-first", "scope": "row"})
+    for i in range(16, 25):
+        filters[i] = dict(name="div", attrs={"class": "col-first"})
+    return filters
+
+
+def java_package_list():
+    filters = _construct_filters()
+    PACKAGE_INDEX1 = (
+        "https://docs.oracle.com/javase/{version}/docs/api/overview-frame.html"
+    )
+    PACKAGE_INDEX2 = "https://docs.oracle.com/en/java/javase/{version}/docs/api/allpackages-index.html"
+
+    def crawl_single(version: int):
+        assert version in range(6, 25)
+        res = []
+        if version < 11:
+            url = PACKAGE_INDEX1.format(version=version)
+        else:
+            url = PACKAGE_INDEX2.format(version=version)
+
+        html_doc = requests.get(url).content
+        soup = BeautifulSoup(html_doc, "html.parser")
+        filter = filters[version]
+
+        res = []
+        if version == 6:
+            for font in soup.find_all(**filter):
+                if font.text != "All Classes":
+                    res.append(font.text)
+
+        elif version in range(7, 11):
+            ul = soup.find(**filter)
+            if url:
+                for li in ul.find_all(name="li"):
+                    res.append(li.text)
+
+        elif version in range(11, 25):
+            for th in soup.find_all(**filter):
+                if th.text == "Package":
+                    continue
+                res.append(th.text)
+
+        res = list(set(res))
+        return res
+
+    res = {}
+    all_pkgs = []
+    for i in range(6, 25):
+        packages = crawl_single(i)
+        all_pkgs.extend(packages)
+        print(f"{i:<2}: {len(packages)} packages")
+        res[i] = packages
+    res["all"] = list(set(all_pkgs))
+    with open("java_standard_packages.json", "w") as outf:
+        json.dump(res, outf, indent=4)

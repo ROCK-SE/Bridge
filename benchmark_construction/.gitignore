@@ -4,3 +4,5 @@ store_blobs.py
 *.csv
 memo
 config.json
+test.py
+test.java
