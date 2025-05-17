@@ -47,3 +47,7 @@ for p in {py,java}; do
 done
 rm pyblob.{0..127}
 rm javablob.{0..127}
+cat pyblob_{0..127}.idx >pyblob.idx
+rm pyblob_{0..127}.idx
+cat javablob_{0..127}.idx >javablob.idx
+rm javablob_{0..127}.idx
