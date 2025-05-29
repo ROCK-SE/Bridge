@@ -11,3 +11,4 @@ tree-sitter-java==0.23.5
 tree-sitter-python==0.23.6
 isort==6.0.1
 beautifulsoup4==4.13.4
+Levenshtein==0.27.1

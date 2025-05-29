@@ -3,14 +3,13 @@ import json
 import os
 
 import pandas as pd
-import pymongo.collection
+import pymongo
 from pymongo import MongoClient
+from pymongo.collection import Collection
 from tqdm.auto import tqdm
 
 client = MongoClient("127.0.0.1", 27017)
 db = client["api_update"]
-import pymongo
-
 tqdm.pandas()
 
 
@@ -95,7 +94,7 @@ def join_data():
     java_col.create_index("commit")
 
 
-def insert_many_skip_large(col: pymongo.collection.Collection, documents: list[dict]):
+def insert_many_skip_large(col: Collection, documents: list[dict]):
     error_docs = []
     try:
         col.insert_many(documents, ordered=False)
