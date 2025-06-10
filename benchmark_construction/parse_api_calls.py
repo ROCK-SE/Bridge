@@ -12,7 +12,7 @@ import tree_sitter_python as tspython
 from isort.stdlibs.all import stdlib
 from joblib import Parallel, delayed
 from tqdm import tqdm
-from tree_sitter import Language, Parser, Tree
+from tree_sitter import Language, Node, Parser, Tree
 from utils import java_package_list
 from woc.local import decomp_or_raw
 
@@ -32,29 +32,29 @@ JAVA_STDLIB = json.load(open("java_standard_packages.json"))["all"]
 py_import_query = PY_LANGUAGE.query(
     """
 (import_statement
-([
-    name: (dotted_name) @import_name
-    name: (aliased_import
-    name: (dotted_name) @import_name
-    alias: (identifier) @alias_name)
-]))
+    ([
+        name: (dotted_name) @import_name
+        name: (aliased_import
+            name: (dotted_name) @import_name
+            alias: (identifier) @alias_name)
+    ]))
 
 (import_from_statement
-module_name: (dotted_name) @from_module
-([
-    name: (dotted_name) @import_name
-    name: (aliased_import
-    name: (dotted_name) @import_name
-    alias: (identifier) @alias_name)
-]))
+    module_name: (dotted_name) @from_module
+    ([
+        name: (dotted_name) @import_name
+        name: (aliased_import
+            name: (dotted_name) @import_name
+            alias: (identifier) @alias_name)
+    ]))
 """
 )
 
 py_call_query = PY_LANGUAGE.query(
     """
 (call
-function: (primary_expression) @name
-arguments: (argument_list) @arguments) @call
+    function: (primary_expression) @name
+    arguments: (argument_list) @arguments) @call
 """
 )
 
@@ -90,23 +90,52 @@ java_call_query = JAVA_LANGUAGE.query(
 
 
 def parse_imports_python(tree: Tree):
-    modules = []
     alias_mapping = {}
 
     for match in py_import_query.matches(tree.root_node):
         import_name = match[1]["import_name"][0].text.decode(errors="ignore")
+        if "alias_name" in match[1]:
+            alias_name = match[1]["alias_name"][0].text.decode(errors="ignore")
+        else:
+            alias_name = import_name
         if match[0] == 1:
             from_module = match[1]["from_module"][0].text.decode(errors="ignore")
-            alias_mapping[import_name] = f"{from_module}.{import_name}"
             import_name = f"{from_module}.{import_name}"
         if import_name.split(".")[0] in stdlib:
             continue
-        modules.append(import_name)
+        alias_mapping[alias_name] = import_name
 
-        if "alias_name" in match[1]:
-            alias_name = match[1]["alias_name"][0].text.decode(errors="ignore")
-            alias_mapping[alias_name] = import_name
-    return modules, alias_mapping
+    return alias_mapping
+
+
+def resolve_alias_name(name: str, alias_mapping: dict[str, str]) -> str | None:
+    parts = name.split(".")
+    for i in range(len(parts)):
+        cur_name = ".".join(parts[: i + 1])
+        alias = alias_mapping.get(cur_name)
+        if alias is None:
+            continue
+        return ".".join([alias] + parts[i + 1 :])
+
+    return None
+
+
+def get_context_py(cur_node: Node):
+    parent = cur_node.parent
+    context = []
+    while parent:
+        if parent.type == "module":
+            break
+        elif parent.type == "function_definition":
+            context.append(
+                f"{parent.child_by_field_name('name').text.decode(errors='ignore')}()"
+            )
+        elif parent.type == "class_definition":
+            context.append(
+                parent.child_by_field_name("name").text.decode(errors="ignore")
+            )
+        parent = parent.parent
+    return ".".join(reversed(context))
 
 
 def parse_api_calls_python(source: bytes | str):
@@ -115,43 +144,67 @@ def parse_api_calls_python(source: bytes | str):
 
     tree = py_parser.parse(source)
 
-    modules, alias_mapping = parse_imports_python(tree)
+    alias_mapping = parse_imports_python(tree)
+    modules = list(set(alias_mapping.values()))
 
     call_graphs = {}
     for match in py_call_query.matches(tree.root_node):
-        cur_node = match[1]["call"][0]
-        line_no = match[1]["name"][0].start_point[0]
         name = match[1]["name"][0].text.decode(errors="ignore")
-        parts = name.split(".")
-        top_level = alias_mapping.get(parts[0], parts[0])
-        if top_level not in modules:
+        if not all(i.isidentifier() for i in name.split(".")):
             continue
-        full_name = ".".join([top_level] + parts[1:])
+        full_name = resolve_alias_name(name, alias_mapping)
+        if full_name is None:
+            continue
+
         arguments_node = match[1]["arguments"][0]
         arguments = []
-        if arguments_node.type == "generator_expression":
-            arguments = [arguments_node.text.decode(errors="ignore")[1:-1]]
-        elif arguments_node.type == "argument_list":
-            for child in arguments_node.named_children:
-                arguments.append(child.text.decode(errors="ignore"))
-        parent = cur_node.parent
-        context = []
-        while parent:
-            if parent.type == "module":
-                break
-            elif parent.type == "function_definition":
-                context.append(
-                    f"{parent.child_by_field_name('name').text.decode(errors='ignore')}()"
-                )
-            elif parent.type == "class_definition":
-                context.append(
-                    parent.child_by_field_name("name").text.decode(errors="ignore")
-                )
-            parent = parent.parent
-        caller = ".".join(reversed(context))
+        for arg in arguments_node.named_children:
+            arg_type = arg.type
+            arg_text = arg.text.decode(errors="ignore")
+            if arg_type == "keyword_argument":
+                keyword_name = arg.child_by_field_name("name")
+                keyword_value = arg.child_by_field_name("value")
+                arg_info = {
+                    "arg_type": "keyword",
+                    "key": keyword_name.text.decode(errors="ignore"),
+                    "value": keyword_value.text.decode(errors="ignore"),
+                    "value_type": keyword_value.type,
+                }
+            elif arg_type == "dictionary_splat":
+                tmp_node = arg.children[1]
+                arg_info = {
+                    "arg_type": "**keyword",
+                    "value": tmp_node.text.decode(errors="ignore"),
+                    "value_type": tmp_node.type,
+                }
+            elif arg_type == "list_splat":
+                tmp_node = arg.children[1]
+                arg_info = {
+                    "arg_type": "*positional",
+                    "value": tmp_node.text.decode(errors="ignore"),
+                    "value_type": tmp_node.type,
+                }
+            else:
+                arg_info = {
+                    "arg_type": "positional",
+                    "value": arg_text,
+                    "value_type": arg_type,
+                }
+            arguments.append(arg_info)
+
+        cur_node = match[1]["call"][0]
+        caller = get_context_py(cur_node)
+
+        line_no = match[1]["name"][0].start_point[0]
         call_graphs[caller] = call_graphs.get(caller, [])
-        call_graphs[caller].append([full_name, line_no, arguments])
-    return [modules, call_graphs]
+        call_graphs[caller].append(
+            {"full_name": full_name, "line_no": line_no, "arguments": arguments}
+        )
+
+    return {
+        "modules": modules,
+        "api_calls": [{"caller": k, "callee": v} for k, v in call_graphs.items()],
+    }
 
 
 def parse_imports_java(tree: Tree):
@@ -166,7 +219,7 @@ def parse_imports_java(tree: Tree):
     return full_class_names, class_mappings
 
 
-def get_context_java(cur_node: None):
+def get_context_java(cur_node: Node):
     parent = cur_node.parent
     context = []
     while parent:
