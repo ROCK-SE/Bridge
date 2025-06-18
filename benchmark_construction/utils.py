@@ -408,6 +408,17 @@ def javafx_soup_parser(version: int):
         return parse_th_or_div_tag
 
 
+def list_java_lang():
+    url = "https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/lang/package-summary.html"
+    soup = get_soup(url)
+    class_summary_div = soup.find("div", attrs={"id": "class-summary"})
+    result = []
+    for div in class_summary_div.find_all(name="div", attrs={"class": "col-first"}):
+        if div.text != "class":
+            result.append(div.text.split("<")[0])
+    return result
+
+
 def java_package_list():
     java_packages = {}
     for version in range(25):
@@ -713,6 +724,8 @@ def java_package_list():
         "javax.microedition.rms",
         "javax.microedition.swm",
     ]
+
+    java_packages["java.lang"] = list_java_lang()
 
     with open("java_standard_packages.json", "w") as outf:
         json.dump(java_packages, outf, indent=4)
