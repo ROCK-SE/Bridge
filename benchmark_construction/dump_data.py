@@ -137,7 +137,7 @@ def dump_api_call():
                 error_docs = insert_many_skip_large(api_calls_col, res)
                 for doc in error_docs:
                     print(fn.split(".")[-1], doc["blob"])
-        api_calls_col.create_index("blob_sha")
+        api_calls_col.create_index("blob")
 
 
 if __name__ == "__main__":
