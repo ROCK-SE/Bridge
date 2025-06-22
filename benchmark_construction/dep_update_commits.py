@@ -107,8 +107,8 @@ def filter(file_type: str):
     updates = updates.explode("update pairs")
     num_update_deps = len(updates)
 
-    # Split package, version before, and version after in each update to individual column
-    updates[["package", "version before", "version after"]] = updates[
+    # Split package, version after, and version before in each update to individual column
+    updates[["package", "version after", "version before"]] = updates[
         "update pairs"
     ].str.split(",", expand=True)
     num_unique_pkgs1 = updates["package"].nunique()
