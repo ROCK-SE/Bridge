@@ -6,11 +6,12 @@ import os
 import sys
 
 import pandas as pd
+from dump_data import insert_many_skip_large
 from joblib import Parallel, delayed
 from Levenshtein import distance, ratio
 from pymongo import MongoClient
 from pymongo.collection import Collection
-from tqdm.auto import tqdm
+from tqdm.auto import tqdm, trange
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -267,9 +268,7 @@ def get_nearby_apis_batch(commit_records: list[str], lang: str, idx: int):
                     logger.debug(f"get_update_relevant_apis() error for {commit}")
         except:
             logger.debug(f"get_dependency_update_info() error for {record[0]}")
-    with open(
-        f"../benchmark/updates/{lang}condensed_api_calls.json.{idx}", "w"
-    ) as outf:
+    with open(f"../benchmark/updates/{lang}api_call_changes.json.{idx}", "w") as outf:
         json.dump(res, outf)
 
 
@@ -325,6 +324,16 @@ def get_nearby_apis(lang: str, n_jobs: int = 1, batch_size: int = 1):
         delayed(get_nearby_apis_batch)(batch, lang, i)
         for i, batch in tqdm(enumerate(batches), total=num_batches, file=sys.stdout)
     )
+
+    client = MongoClient("127.0.0.1", 27017)
+    db = client["api_update"]
+    col = db[f"{lang}_api_call_changes"]
+    for i in trange(num_batches):
+        filepath = f"../benchmark/updates/{lang}api_call_changes.json.{i}"
+        insert_many_skip_large(col, json.load(open(filepath)))
+        os.remove(filepath)
+    col.create_index("commit")
+    col.create_index("packages")
 
 
 if __name__ == "__main__":
