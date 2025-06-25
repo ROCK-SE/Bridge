@@ -340,6 +340,7 @@ def get_nearby_apis(lang: str, n_jobs: int = 1, batch_size: int = 1):
     )
     db.drop_collection(f"{lang}_api_call_changes")
     data = df.to_dict("records")
+    insert_many_skip_large(col, data)
     col.create_index("commit")
     col.create_index("packages")
 
