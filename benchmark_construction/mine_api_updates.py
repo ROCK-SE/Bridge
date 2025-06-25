@@ -327,11 +327,19 @@ def get_nearby_apis(lang: str, n_jobs: int = 1, batch_size: int = 1):
 
     client = MongoClient("127.0.0.1", 27017)
     db = client["api_update"]
+    db.drop_collection(f"{lang}_api_call_changes")
     col = db[f"{lang}_api_call_changes"]
     for i in trange(num_batches):
         filepath = f"../benchmark/updates/{lang}api_call_changes.json.{i}"
         insert_many_skip_large(col, json.load(open(filepath)))
         os.remove(filepath)
+    df = pd.DataFrame(col.find({}, projection={"_id": 0}))
+    df.drop_duplicates(
+        ["old_blob", "new_blob", "package", "version_before", "version_after"],
+        inplace=True,
+    )
+    db.drop_collection(f"{lang}_api_call_changes")
+    data = df.to_dict("records")
     col.create_index("commit")
     col.create_index("packages")
 
