@@ -1,31 +1,14 @@
 import glob
 import json
-import os
 
 import pandas as pd
-import pymongo
 from pymongo import MongoClient
-from pymongo.collection import Collection
 from tqdm.auto import tqdm, trange
+from utils import insert_many_skip_large
 
 client = MongoClient("127.0.0.1", 27017)
 db = client["api_update"]
 tqdm.pandas()
-
-
-def insert_many_skip_large(col: Collection, documents: list[dict]):
-    error_docs = []
-    try:
-        col.insert_many(documents, ordered=False)
-    except Exception as e:
-        for doc in documents:
-            try:
-                col.insert_one(doc)
-            except pymongo.errors.DuplicateKeyError as e:
-                pass
-            except Exception as e:
-                error_docs.append(doc)
-    return error_docs
 
 
 def merge_packages(df):

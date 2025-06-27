@@ -6,12 +6,11 @@ import os
 import sys
 
 import pandas as pd
-from dump_data import insert_many_skip_large
 from joblib import Parallel, delayed
-from Levenshtein import distance, ratio
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from tqdm.auto import tqdm, trange
+from utils import insert_many_skip_large
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

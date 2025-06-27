@@ -3,10 +3,12 @@ import logging
 import os
 import urllib.request
 
+import pymongo
 import requests
 from bs4 import BeautifulSoup
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
+from pymongo.collection import Collection
 from woc.local import WocMapsLocal
 
 logger = logging.getLogger(__name__)
@@ -233,6 +235,21 @@ def format_sexpression(s, indent_level=0, indent_size=4):
             need_newline = True  # Next token should start on a new line
         i += 1
     return output
+
+
+def insert_many_skip_large(col: Collection, documents: list[dict]):
+    error_docs = []
+    try:
+        col.insert_many(documents, ordered=False)
+    except Exception as e:
+        for doc in documents:
+            try:
+                col.insert_one(doc)
+            except pymongo.errors.DuplicateKeyError as e:
+                pass
+            except Exception as e:
+                error_docs.append(doc)
+    return error_docs
 
 
 def get_soup(url: str) -> BeautifulSoup:
