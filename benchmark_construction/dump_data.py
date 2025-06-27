@@ -97,32 +97,6 @@ def dump_blob_changes():
     col.create_index("commit")
 
 
-def dump_api_call():
-    for lang in ["py", "java"]:
-        col_name = f"{lang}_api_calls"
-        db.drop_collection(col_name)
-        api_calls_col = db[col_name]
-        path = f"../benchmark/updates/{lang}blob_api_calls.json.*"
-        files = glob.glob(path)
-        files.sort(key=lambda x: int(x.split(".")[-1]))
-        print(f"{lang}: {len(files)} json files")
-        for fn in tqdm(files, desc=lang):
-            with open(fn) as f:
-                res = []
-                for blob_sha, values in json.load(f).items():
-                    res.append(
-                        {
-                            "blob": blob_sha,
-                            "modules": values["modules"],
-                            "api_calls": values["api_calls"],
-                        }
-                    )
-                error_docs = insert_many_skip_large(api_calls_col, res)
-                for doc in error_docs:
-                    print(fn.split(".")[-1], doc["blob"])
-        api_calls_col.create_index("blob")
-
-
 if __name__ == "__main__":
     import argparse
 
@@ -142,17 +116,9 @@ if __name__ == "__main__":
         action="store_true",
         help="dump blob change info for commits",
     )
-    parser.add_argument(
-        "-a",
-        "--api_call",
-        action="store_true",
-        help="dump api call info for modified blobs",
-    )
     args = parser.parse_args()
 
     if args.dependency_updates:
         dump_dependency_updates()
     if args.blob_changes:
         dump_blob_changes()
-    if args.api_call:
-        dump_api_call()

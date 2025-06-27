@@ -10,10 +10,14 @@ import tree_sitter_java as tsjava
 import tree_sitter_python as tspython
 from isort.stdlibs.all import stdlib
 from joblib import Parallel, delayed
-from tqdm.auto import tqdm
+from pymongo import MongoClient
+from tqdm.auto import tqdm, trange
 from tree_sitter import Language, Node, Parser, Tree
-from utils import java_package_list
+from utils import insert_many_skip_large, java_package_list
 from woc.local import decomp_or_raw
+
+client = MongoClient("127.0.0.1", 27017)
+db = client["api_update"]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -469,6 +473,29 @@ def parse_batch(lang: str, i: int, batch: list):
         json.dump(res, outf)
 
 
+def dump_api_call(lang: str, num_batches: int):
+    col_name = f"{lang}_api_calls"
+    db.drop_collection(col_name)
+    api_calls_col = db[col_name]
+    for i in trange(num_batches):
+        filepath = f"../benchmark/updates/{lang}blob_api_calls.json.{i}"
+        with open(filepath) as f:
+            data = []
+            for blob_sha, values in json.load(f).items():
+                data.append(
+                    {
+                        "blob": blob_sha,
+                        "modules": values["modules"],
+                        "api_calls": values["api_calls"],
+                    }
+                )
+            error_docs = insert_many_skip_large(api_calls_col, data)
+            for doc in error_docs:
+                print(i, doc["blob"])
+        os.remove(filepath)
+    api_calls_col.create_index("blob")
+
+
 def parse_all(lang: str, n_jobs: int = 1, batch_size: int = 1):
     total_lines = sum(1 for i in open(f"../benchmark/updates/{lang}blob.idx", "rb"))
     num_batches = math.ceil(total_lines / batch_size)
@@ -483,6 +510,8 @@ def parse_all(lang: str, n_jobs: int = 1, batch_size: int = 1):
         delayed(parse_batch)(lang, i, batch)
         for i, batch in tqdm(enumerate(batches), total=num_batches, file=sys.stdout)
     )
+
+    dump_api_call(lang, num_batches)
 
 
 if __name__ == "__main__":
