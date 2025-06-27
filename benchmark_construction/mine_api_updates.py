@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import os
+import re
 import sys
 
 import pandas as pd
@@ -324,21 +325,24 @@ def get_nearby_apis(lang: str, n_jobs: int = 1, batch_size: int = 1):
         for i, batch in tqdm(enumerate(batches), total=num_batches, file=sys.stdout)
     )
 
-    client = MongoClient("127.0.0.1", 27017)
-    db = client["api_update"]
-    db.drop_collection(f"{lang}_api_call_changes")
-    col = db[f"{lang}_api_call_changes"]
+    data = []
     for i in trange(num_batches):
         filepath = f"../benchmark/updates/{lang}api_call_changes.json.{i}"
-        insert_many_skip_large(col, json.load(open(filepath)))
+        data.extend(json.load(open(filepath)))
         os.remove(filepath)
-    df = pd.DataFrame(col.find({}, projection={"_id": 0}))
+    df = pd.DataFrame(data)
+    print(f"{len(df)} {lang} api change records before deduplicates")
     df.drop_duplicates(
         ["old_blob", "new_blob", "package", "version_before", "version_after"],
         inplace=True,
     )
-    db.drop_collection(f"{lang}_api_call_changes")
+    print(f"{len(df)} {lang} api change records after deduplicates")
     data = df.to_dict("records")
+
+    client = MongoClient("127.0.0.1", 27017)
+    db = client["api_update"]
+    db.drop_collection(f"{lang}_api_call_changes")
+    col = db[f"{lang}_api_call_changes"]
     insert_many_skip_large(col, data)
     col.create_index("commit")
     col.create_index("packages")
