@@ -4,15 +4,13 @@ import logging
 import math
 import os
 import sys
-
-
 from argparse import ArgumentParser
 
 import tree_sitter_java as tsjava
 import tree_sitter_python as tspython
 from isort.stdlibs.all import stdlib
 from joblib import Parallel, delayed
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from tree_sitter import Language, Node, Parser, Tree
 from utils import java_package_list
 from woc.local import decomp_or_raw
@@ -165,19 +163,26 @@ def resolve_alias_name(name: str, alias_mapping: dict[str, str]) -> str | None:
 def get_caller_py(cur_node: Node):
     parent = cur_node.parent
     context = []
+    line_no = 0
     while parent:
         if parent.type == "module":
+            if len(context) == 0:
+                line_no = parent.start_point[0]
             break
         elif parent.type == "function_definition":
+            if len(context) == 0:
+                line_no = parent.start_point[0]
             context.append(
                 f"{parent.child_by_field_name('name').text.decode(errors='ignore')}()"
             )
         elif parent.type == "class_definition":
+            if len(context) == 0:
+                line_no = parent.start_point[0]
             context.append(
                 parent.child_by_field_name("name").text.decode(errors="ignore")
             )
         parent = parent.parent
-    return ".".join(reversed(context))
+    return ".".join(reversed(context)), line_no
 
 
 def parse_api_calls_python(source: bytes | str):
@@ -232,15 +237,17 @@ def parse_api_calls_python(source: bytes | str):
                     "value": arg_text,
                     "value_type": arg_type,
                 }
+            if arg_info["value_type"] == "comment":
+                continue
             arguments.append(arg_info)
 
         cur_node = match[1]["call"][0]
-        caller = get_caller_py(cur_node)
+        caller, caller_line_no = get_caller_py(cur_node)
 
-        line_no = match[1]["name"][0].start_point[0]
+        offset = match[1]["name"][0].start_point[0] - caller_line_no
         call_graphs[caller] = call_graphs.get(caller, [])
         call_graphs[caller].append(
-            {"full_name": full_name, "line_no": line_no, "arguments": arguments}
+            {"full_name": full_name, "offset": offset, "arguments": arguments}
         )
 
     return {
@@ -262,10 +269,15 @@ def parse_imports_java(tree: Tree):
 def get_caller_java(cur_node: Node):
     parent = cur_node.parent
     context = []
+    line_no = 0
     while parent:
         if parent.type == "program":
+            if len(context) == 0:
+                line_no = parent.start_point[0]
             break
         elif parent.type in ["method_declaration", "constructor_declaration"]:
+            if len(context) == 0:
+                line_no = parent.start_point[0]
             method_name = parent.child_by_field_name("name").text.decode(
                 errors="ignore"
             )
@@ -277,6 +289,8 @@ def get_caller_java(cur_node: Node):
                     parameter_types.append(t)
             context.append(f"{method_name}({', '.join(parameter_types)})")
         elif parent.type == "compact_constructor_declaration":
+            if len(context) == 0:
+                line_no = parent.start_point[0]
             context.append(
                 parent.child_by_field_name("name").text.decode(errors="ignore")
             )
@@ -287,11 +301,13 @@ def get_caller_java(cur_node: Node):
             "interface_declaration",
             "annotation_type_declaration",
         ]:
+            if len(context) == 0:
+                line_no = parent.start_point[0]
             class_name = parent.child_by_field_name("name").text.decode(errors="ignore")
             context.append(f"{parent.type.split('_')[0]}@{class_name}")
         parent = parent.parent
 
-    return tuple(reversed(context))
+    return tuple(reversed(context)), line_no
 
 
 def parse_variable_types_java(tree: Tree):
@@ -312,7 +328,7 @@ def parse_variable_types_java(tree: Tree):
         if identifier_str == "_":
             continue
 
-        context = get_caller_java(declaration_node)
+        context, _ = get_caller_java(declaration_node)
         variable_types[identifier_str] = variable_types.get(identifier_str, {})
         if context not in variable_types[identifier_str]:
             variable_types[identifier_str][context] = [(line_no, type_str)]
@@ -370,7 +386,7 @@ def parse_api_calls_java(source: bytes | str):
             continue
         cur_node = match[1]["method_invocation"][0]
         line_no = cur_node.start_point[0]
-        context = get_caller_java(cur_node)
+        context, caller_line_no = get_caller_java(cur_node)
         if left_part in variable_types:
             left_part = resolve_obj_type_java(
                 left_part, context, line_no, variable_types
@@ -398,7 +414,11 @@ def parse_api_calls_java(source: bytes | str):
 
         call_graphs[context] = call_graphs.get(context, [])
         call_graphs[context].append(
-            {"full_name": method_name, "line_no": line_no, "arguments": arguments}
+            {
+                "full_name": method_name,
+                "offset": line_no - caller_line_no,
+                "arguments": arguments,
+            }
         )
 
     return {
