@@ -405,7 +405,11 @@ def parse_api_calls_java(source: bytes | str):
         for arg_node in arguments_node.named_children:
             arg_value = arg_node.text.decode(errors="ignore")
             arg_type = arg_node.type
-            if arg_type == "identifier":
+            if arg_type == "line_comment":
+                continue
+            elif arg_type == "block_comment":
+                continue
+            elif arg_type == "identifier":
                 arg_type = resolve_obj_type_java(
                     arg_value, context, line_no, variable_types
                 )
@@ -477,7 +481,7 @@ def dump_api_call(lang: str, num_batches: int):
     col_name = f"{lang}_api_calls"
     db.drop_collection(col_name)
     api_calls_col = db[col_name]
-    for i in trange(num_batches):
+    for i in trange(num_batches, file=sys.stdout):
         filepath = f"../benchmark/updates/{lang}blob_api_calls.json.{i}"
         with open(filepath) as f:
             data = []
