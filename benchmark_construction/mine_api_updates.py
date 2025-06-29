@@ -98,14 +98,14 @@ def get_imported_relevant_packages(
     imported_relevant_packages = {}
     for module in modules:
         pkg = None
+        cur_tl = ""
         for pkg_name, pkg_info in relevant_packages.items():
             top_levels = pkg_info["top_levels"]
             for tl in top_levels:
                 if module.startswith(f"{tl}.") or (module == tl):
-                    pkg = pkg_name
-                    break
-            if pkg:
-                break
+                    if len(tl) > len(cur_tl):
+                        cur_tl = tl
+                        pkg = pkg_name
         if pkg:
             imported_relevant_packages[module] = pkg
     return imported_relevant_packages
