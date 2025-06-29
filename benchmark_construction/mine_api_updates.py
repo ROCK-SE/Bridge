@@ -158,9 +158,15 @@ def get_unique_callees(new_callees: list[dict], old_callees: list[dict]) -> list
         for old_callee in old_callees:
             old_full_name = old_callee["full_name"]
             old_arguments = old_callee["arguments"]
-            if (old_full_name == new_full_name) and (
-                len(old_arguments) == len(new_arguments)
-            ):
+            # It is common that two different method calls have the same full qualified name
+            # but have different parameters in both Java and Python.
+            # Java: method overloading
+            # Python: default arguments, arbitrary arguments (*args, **kwargs)
+            # In these cases, it it hard to validate whether two api calls with the same full
+            # qualified name but different parameters are breaking changes or not. That is, they
+            # can lead to many false positives. Therefore, to keep the dataset with high precision,
+            # we simply filter api calls with the same full qualified name.
+            if old_full_name == new_full_name:
                 matched = True
                 break
         if not matched:
