@@ -2,15 +2,13 @@ import argparse
 import json
 import logging
 import os
-import random
 import sys
-import time
 import zipfile
 
 import pandas as pd
 from joblib import Parallel, delayed
 from tqdm import tqdm
-from utils import download, is_strict_ver
+from utils import download, gen_jar_url_path, is_strict_ver, polite_download
 
 try:
     with open("config.json") as inf:
@@ -80,23 +78,6 @@ def download_python_packages(n_jobs: int, dest_folder: str):
         )
         for row in tqdm(df.itertuples(), file=sys.stdout, total=len(df))
     )
-
-
-def gen_jar_url_path(name: str, version: str):
-    group_id, artifact_id = name.split(":")
-    group_path = "/".join(group_id.split("."))
-    jar_name = f"{artifact_id}-{version}.jar"
-    url = (
-        f"https://repo1.maven.org/maven2/{group_path}"
-        + f"/{artifact_id}/{version}/{jar_name}"
-    )
-    save_path = os.path.join(group_path, jar_name)
-    return url, save_path
-
-
-def polite_download(url, save_path: str):
-    download(url, save_path)
-    time.sleep(random.random() * 3)
 
 
 def download_java_packages(n_jobs: int, dest_folder: str):

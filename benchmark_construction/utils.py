@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import random
+import time
 import urllib.request
 
 import pymongo
@@ -195,6 +197,23 @@ def download(
             logger.error(f"Error downloading {url}, retry {i}: {e}")
 
     return success
+
+
+def gen_jar_url_path(name: str, version: str):
+    group_id, artifact_id = name.split(":")
+    group_path = "/".join(group_id.split("."))
+    jar_name = f"{artifact_id}-{version}.jar"
+    url = (
+        f"https://repo1.maven.org/maven2/{group_path}"
+        + f"/{artifact_id}/{version}/{jar_name}"
+    )
+    save_path = os.path.join(group_path, jar_name)
+    return url, save_path
+
+
+def polite_download(url, save_path: str):
+    download(url, save_path)
+    time.sleep(random.random() * 3)
 
 
 def format_sexpression(s, indent_level=0, indent_size=4):
