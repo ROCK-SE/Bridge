@@ -8,8 +8,10 @@ import sys
 
 import pandas as pd
 from joblib import Parallel, delayed
+from Levenshtein import distance, ratio
 from pymongo import MongoClient
 from pymongo.collection import Collection
+from textblob import Word
 from tqdm.auto import tqdm, trange
 from utils import insert_many_skip_large
 
@@ -351,7 +353,236 @@ def get_nearby_apis(lang: str, n_jobs: int = 1, batch_size: int = 1):
     col = db[f"{lang}_api_call_changes"]
     insert_many_skip_large(col, data)
     col.create_index("commit")
-    col.create_index("packages")
+    col.create_index("package")
+
+
+def split_java_identifier(identifier: str) -> list[str]:
+    res = []
+    for part in identifier.split("_"):
+        if not part:
+            continue
+        res.extend(
+            re.sub("([A-Z][a-z]+)", r" \1", re.sub("([A-Z]+)", r" \1", part)).split()
+        )
+    return [Word(s.lower()).singularize() for s in res]
+
+
+def split_identifier_list(identifier_list: str | list[str], splitter) -> list[str]:
+    if isinstance(identifier_list, str):
+        identifier_list = [identifier_list]
+    res = []
+    for identifier in identifier_list:
+        res.extend(splitter(identifier))
+    return res
+
+
+def split_java_class_method_names(full_api_name: str) -> tuple[list[str], str]:
+    parts = full_api_name.split(".")
+    for i, part in enumerate(parts):
+        if part[0].isupper():
+            break
+    return parts[i:-1], parts[-1]
+
+
+def custom_equal(p1: str, p2: str, equal_thresh: float = 0.8) -> bool:
+    if p1 == p2:
+        return True
+    if p1.startswith(p2) or p2.startswith(p1):
+        return True
+    dis = distance(p1, p2)
+    lensum = len(p1) + len(p2)
+    ratio = (lensum - dis) / lensum
+    return ratio >= equal_thresh
+
+
+def name_similarity(
+    name1: str | list[str],
+    name2: str | list[str],
+    min_word_len: int = 2,
+    equal_thresh: float = 0.8,
+) -> float:
+    parts1 = [
+        word
+        for word in set(split_identifier_list(name1, split_java_identifier))
+        if len(word) >= min_word_len
+    ]
+    parts1.sort()
+    parts2 = [
+        word
+        for word in set(split_identifier_list(name2, split_java_identifier))
+        if len(word) >= min_word_len
+    ]
+    parts2.sort()
+
+    if parts1 == parts2:
+        return 1.0
+
+    max_len = max(len(parts1), len(parts2))
+    num_common_parts = 0
+    for p1 in parts1:
+        for p2 in parts2:
+            if custom_equal(p1, p2, equal_thresh):
+                parts2.remove(p2)
+                num_common_parts += 1
+                break
+    return num_common_parts / max_len
+
+
+def java_api_name_similarity(
+    full_api_name1: str,
+    full_api_name2: str,
+    min_word_len: int = 2,
+    equal_thresh: float = 0.8,
+):
+    class_name1, method_name1 = split_java_class_method_names(full_api_name1)
+    class_name2, method_name2 = split_java_class_method_names(full_api_name2)
+
+    if class_name1 == class_name2:
+        class_similarity = 1.0
+    else:
+        class_similarity = name_similarity(
+            class_name1, class_name2, min_word_len, equal_thresh
+        )
+
+    # Common method naming conventions that create instance of the caller class
+    # Therefore, I assign them with the value of class name
+    special_method_names = [
+        "valueOf",
+        "from",
+        "of",
+        "getInstance",
+        "newInstance",
+        "create",
+    ]
+    if method_name1 in special_method_names:
+        method_name1 = class_name1
+    if method_name2 in special_method_names:
+        method_name2 = class_name2
+    if method_name1 == method_name2:
+        method_similarity = 1.0
+    else:
+        method_similarity = name_similarity(
+            method_name1, method_name2, min_word_len, equal_thresh
+        )
+
+    return class_similarity, method_similarity
+
+
+def offset_similarity(offset1: int, offset2: int):
+    dis = abs(offset1 - offset2)
+    # add 1 to avoid zero division error
+    return 1 / (dis + 1)
+
+
+def arguments_similarity(arguments1: list[dict], arguments2: list[dict]):
+    func = lambda arguments: [arg["value"] for arg in arguments]
+    arguments1 = func(arguments1)
+    arguments2 = func(arguments2)
+    lensum = len(arguments1) + len(arguments2)
+    if lensum == 0:
+        return 0.6
+    return ratio(arguments1, arguments2)
+
+
+def java_api_call_similarity(
+    api_call1: dict,
+    api_call2: dict,
+    weights: list[float] = [0.3, 0.3, 0.2, 0.2],
+    min_word_len: int = 2,
+    equal_thresh: float = 0.8,
+):
+    assert len(weights) == 4
+    full_name1 = api_call1["full_name"]
+    full_name2 = api_call2["full_name"]
+    class_sim, method_sim = java_api_name_similarity(
+        full_name1, full_name2, min_word_len, equal_thresh
+    )
+    offset1 = api_call1["offset"]
+    offset2 = api_call2["offset"]
+    offset_sim = offset_similarity(offset1, offset2)
+    arguments1 = api_call1["arguments"]
+    arguments2 = api_call2["arguments"]
+    arg_sim = arguments_similarity(arguments1, arguments2)
+
+    overall_sim = (
+        weights[0] * class_sim
+        + weights[1] * method_sim
+        + weights[2] * offset_sim
+        + weights[3] * arg_sim
+    ) / sum(weights)
+    return overall_sim
+
+
+def mine_java_api_update_instance(
+    doc: dict,
+    sim_threshold: float = 0.6,
+    num_neighbors: int = 3,
+    weights: list[float] = [0.3, 0.3, 0.2, 0.2],
+    min_word_len: int = 2,
+    equal_thresh: float = 0.8,
+):
+    api_update_pairs = []
+    for api_calls in doc["api_calls"]:
+        caller = api_calls["caller"]
+        new_callees = api_calls["new_callees"]
+        old_callees = api_calls["old_callees"]
+        for new_callee in new_callees:
+            max_sim_score = 0
+            best_candidate = None
+            candidate_old_callees = sorted(
+                old_callees,
+                key=lambda old_callee: abs(old_callee["offset"] - new_callee["offset"]),
+            )[:num_neighbors]
+            for old_callee in candidate_old_callees:
+                sim_score = java_api_call_similarity(
+                    new_callee, old_callee, weights, min_word_len, equal_thresh
+                )
+                if sim_score > max_sim_score:
+                    max_sim_score = sim_score
+                    best_candidate = old_callee
+            if max_sim_score >= sim_threshold:
+                api_update_pairs.append(
+                    {
+                        "caller": caller,
+                        "old_callee": best_candidate,
+                        "new_callee": new_callee,
+                        "similarity_score": max_sim_score,
+                    }
+                )
+    if api_update_pairs:
+        res = {}
+        for k in [
+            "commit",
+            "filepath",
+            "old_blob",
+            "new_blob",
+            "package",
+            "version_before",
+            "version_after",
+        ]:
+            res[k] = doc[k]
+        res["api_update_pairs"] = api_update_pairs
+        return res
+
+
+def mine_all(lang: str, n_jobs: int = 1):
+    client = MongoClient("127.0.0.1", 27017)
+    db = client["api_update"]
+    api_call_changes_col = db[f"{lang}_api_call_changes"]
+    docs = list(api_call_changes_col.find({}))
+    print(f"{lang}: {len(docs)} api call change records")
+    if lang == "java":
+        miner = mine_java_api_update_instance
+    res = Parallel(n_jobs=30, backend="multiprocessing")(
+        delayed(miner)(doc) for doc in tqdm(docs)
+    )
+    final_res = [_ for _ in res if _]
+    print(f"{lang}: {len(final_res)} candidates")
+    db.drop_collection(f"{lang}_candidate_api_update_instances")
+    candidate_api_update_instances = db[f"{lang}_candidate_api_update_instances"]
+    insert_many_skip_large(candidate_api_update_instances, final_res)
+    candidate_api_update_instances.create_index("commit")
+    candidate_api_update_instances.create_index("package")
 
 
 if __name__ == "__main__":
@@ -369,7 +600,26 @@ if __name__ == "__main__":
         default=1,
         help="the number of records per batch",
     )
+    parser.add_argument(
+        "--nearby",
+        action="store_true",
+        help="get nearby apis",
+    )
+    parser.add_argument(
+        "--java",
+        action="store_true",
+        help="mine candidate api update instances for Java",
+    )
+    parser.add_argument(
+        "--python",
+        action="store_true",
+        help="mine candidate api update instances for Python",
+    )
     args = parser.parse_args()
 
-    get_nearby_apis("py", args.n_jobs, args.batch_size)
-    get_nearby_apis("java", args.n_jobs, args.batch_size)
+    if args.nearby:
+        get_nearby_apis("py", args.n_jobs, args.batch_size)
+        get_nearby_apis("java", args.n_jobs, args.batch_size)
+
+    if args.java:
+        mine_all("java", args.n_jobs)
