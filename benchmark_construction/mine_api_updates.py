@@ -576,7 +576,29 @@ def mine_all(lang: str, n_jobs: int = 1):
     res = Parallel(n_jobs=30, backend="multiprocessing")(
         delayed(miner)(doc) for doc in tqdm(docs)
     )
-    final_res = [_ for _ in res if _]
+    if lang == "java":
+        releases_filepath = "../benchmark/updates/maven_releases.json"
+        releases_info = json.load(open(releases_filepath))
+    elif lang == "py":
+        releases_filepath = "../benchmark/updates/pypi_releases.json"
+        releases_info = {
+            pkg: list(v.keys()) for pkg, v in json.load(open(releases_filepath)).items()
+        }
+    print(f"{lang}: {len(releases_info)} packages' release information")
+    final_res = []
+    for doc in tqdm(res):
+        if not doc:
+            continue
+        package = doc["package"]
+        all_versions = releases_info[package]
+        version_before = doc["version_before"]
+        version_after = doc["version_after"]
+        if version_before not in all_versions:
+            continue
+        if version_after not in all_versions:
+            continue
+        final_res.append(doc)
+
     print(f"{lang}: {len(final_res)} candidates")
     db.drop_collection(f"{lang}_candidate_api_update_instances")
     candidate_api_update_instances = db[f"{lang}_candidate_api_update_instances"]
