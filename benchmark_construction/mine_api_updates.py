@@ -515,7 +515,7 @@ def java_api_call_similarity(
 
 def mine_java_api_update_instance(
     doc: dict,
-    sim_threshold: float = 0.6,
+    sim_threshold: float = 0.7,
     num_neighbors: int = 3,
     weights: list[float] = [0.3, 0.3, 0.2, 0.2],
     min_word_len: int = 2,
@@ -573,7 +573,7 @@ def mine_all(lang: str, n_jobs: int = 1):
     print(f"{lang}: {len(docs)} api call change records")
     if lang == "java":
         miner = mine_java_api_update_instance
-    res = Parallel(n_jobs=30, backend="multiprocessing")(
+    res = Parallel(n_jobs=n_jobs, backend="multiprocessing")(
         delayed(miner)(doc) for doc in tqdm(docs)
     )
     if lang == "java":
