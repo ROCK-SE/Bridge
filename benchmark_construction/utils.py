@@ -271,6 +271,60 @@ def insert_many_skip_large(col: Collection, documents: list[dict]):
     return error_docs
 
 
+def literals_to_java_type(value: str, type_literal: str) -> str:
+    if not type_literal.endswith("_literal"):
+        return type_literal
+    if type_literal in [
+        "decimal_integer_literal",
+        "hex_integer_literal",
+        "octal_integer_literal",
+        "binary_integer_literal",
+    ]:
+        if value[-1].lower() == "l":
+            return "long"
+        return "int"
+    if type_literal in ["decimal_floating_point_literal", "ex_floating_point_literal"]:
+        if value[-1].lower() == "f":
+            return "float"
+        return "double"
+    if type_literal in ["true", "false"]:
+        return "boolean"
+    if type_literal == "character_literal":
+        return "char"
+    if type_literal == "string_literal":
+        return "String"
+    if type_literal == "null_literal":
+        return "null"
+    return type_literal
+
+
+def literals_to_scala_type(value: str, type_literal: str) -> str:
+    if not type_literal.endswith("_literal"):
+        return type_literal
+    if type_literal in [
+        "decimal_integer_literal",
+        "hex_integer_literal",
+        "octal_integer_literal",
+        "binary_integer_literal",
+    ]:
+        if value[-1].lower() == "l":
+            return "Long"
+        return "Int"
+    if type_literal in ["decimal_floating_point_literal", "ex_floating_point_literal"]:
+        if value[-1].lower() == "f":
+            return "Float"
+        return "Double"
+    if type_literal in ["true", "false"]:
+        return "Boolean"
+    if type_literal == "character_literal":
+        return "Char"
+    if type_literal == "string_literal":
+        return "String"
+    if type_literal == "null_literal":
+        return "Null"
+    return type_literal
+
+
 def get_soup(url: str) -> BeautifulSoup:
     html_doc = requests.get(url).content
     return BeautifulSoup(html_doc, "html.parser")
