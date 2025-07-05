@@ -143,6 +143,9 @@ def construct_file_tree(filelist: list[str]) -> dict:
         return d
 
     for f in filelist:
+        if f.endswith("/"):
+            continue
+        f = f.strip("/")
         dirname, basename = os.path.split(f)
         if dirname == "/":
             continue
