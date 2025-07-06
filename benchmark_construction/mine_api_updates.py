@@ -11,7 +11,6 @@ from joblib import Parallel, delayed
 from Levenshtein import distance, ratio
 from pymongo import MongoClient
 from pymongo.collection import Collection
-from textblob import Word
 from tqdm.auto import tqdm, trange
 from utils import insert_many_skip_large
 
@@ -364,14 +363,14 @@ def split_java_identifier(identifier: str) -> list[str]:
         res.extend(
             re.sub("([A-Z][a-z]+)", r" \1", re.sub("([A-Z]+)", r" \1", part)).split()
         )
-    return [Word(s.lower()).singularize() for s in res]
+    return [s.lower() for s in res]
 
 
-def split_identifier_list(identifier_list: str | list[str], splitter) -> list[str]:
-    if isinstance(identifier_list, str):
-        identifier_list = [identifier_list]
+def split_identifier_list(identifiers: str | list[str], splitter) -> list[str]:
+    if isinstance(identifiers, str):
+        return splitter(identifiers)
     res = []
-    for identifier in identifier_list:
+    for identifier in identifiers:
         res.extend(splitter(identifier))
     return res
 
@@ -379,41 +378,25 @@ def split_identifier_list(identifier_list: str | list[str], splitter) -> list[st
 def split_java_class_method_names(full_api_name: str) -> tuple[list[str], str]:
     parts = full_api_name.split(".")
     for i, part in enumerate(parts):
+        if not part:
+            continue
         if part[0].isupper():
             break
     return parts[i:-1], parts[-1]
 
 
-def custom_equal(p1: str, p2: str, equal_thresh: float = 0.8) -> bool:
+def custom_equal(p1: str, p2: str, distance_threshold: int = 1) -> bool:
     if p1 == p2:
         return True
     if p1.startswith(p2) or p2.startswith(p1):
         return True
     dis = distance(p1, p2)
-    lensum = len(p1) + len(p2)
-    ratio = (lensum - dis) / lensum
-    return ratio >= equal_thresh
+    return dis <= distance_threshold
 
 
-def name_similarity(
-    name1: str | list[str],
-    name2: str | list[str],
-    min_word_len: int = 2,
-    equal_thresh: float = 0.8,
+def _name_similarity(
+    parts1: list[str], parts2: list[str], distance_threshold: int = 1
 ) -> float:
-    parts1 = [
-        word
-        for word in set(split_identifier_list(name1, split_java_identifier))
-        if len(word) >= min_word_len
-    ]
-    parts1.sort()
-    parts2 = [
-        word
-        for word in set(split_identifier_list(name2, split_java_identifier))
-        if len(word) >= min_word_len
-    ]
-    parts2.sort()
-
     if parts1 == parts2:
         return 1.0
 
@@ -421,27 +404,94 @@ def name_similarity(
     num_common_parts = 0
     for p1 in parts1:
         for p2 in parts2:
-            if custom_equal(p1, p2, equal_thresh):
+            if custom_equal(p1, p2, distance_threshold):
                 parts2.remove(p2)
                 num_common_parts += 1
                 break
     return num_common_parts / max_len
 
 
+def java_method_name_similarity(
+    method_name1: str,
+    method_name2: str,
+    min_word_len: int = 1,
+    distance_threshold: int = 1,
+) -> float:
+    parts1 = [
+        word
+        for word in split_java_identifier(method_name1)
+        if len(word) >= min_word_len
+    ]
+    parts2 = [
+        word
+        for word in split_java_identifier(method_name2)
+        if len(word) >= min_word_len
+    ]
+    if not parts1:
+        return 0.0
+    if not parts2:
+        return 0.0
+    # List borrowed from RepFinder
+    VERBS = ["add", "get", "set", "is", "have", "are", "remove", "delete"]
+    if (parts1[0] in VERBS) and (parts2[0] in VERBS):
+        # set vs get
+        if parts1[0] != parts2[0]:
+            return 0.0
+
+        # isBlack vs isNotBlank
+        if parts1[0] == "is":
+            if (len(parts1) > 1) and (len(parts2) > 1):
+                if (parts1[1] == "not") and (parts2[1] != "not"):
+                    return 0.0
+                if (parts2[1] == "not") and (parts1[1] != "not"):
+                    return 0.0
+
+        return _name_similarity(parts1, parts2, distance_threshold)
+
+    if parts1[0] in ["get", "is"]:
+        return _name_similarity(parts1[1:], parts2, distance_threshold)
+
+    if parts2[0] in ["get", " is"]:
+        return _name_similarity(parts1, parts2[1:], distance_threshold)
+
+    return _name_similarity(parts1, parts2, distance_threshold)
+
+
+def java_class_name_similarity(
+    class_name1: list[str],
+    class_name2: list[str],
+    min_word_len: int = 1,
+    distance_threshold: int = 1,
+) -> float:
+    parts1 = [
+        word
+        for word in split_identifier_list(class_name1, split_java_identifier)
+        if len(word) >= min_word_len
+    ]
+    parts2 = [
+        word
+        for word in set(split_identifier_list(class_name2, split_java_identifier))
+        if len(word) >= min_word_len
+    ]
+    return _name_similarity(parts1, parts2, distance_threshold)
+
+
 def java_api_name_similarity(
     full_api_name1: str,
     full_api_name2: str,
-    min_word_len: int = 2,
-    equal_thresh: float = 0.8,
-):
+    min_word_len: int = 1,
+    distance_threshold: int = 1,
+) -> tuple[float, float]:
+    full_api_name1 = re.sub("[^0-9a-zA-Z_.]", "", full_api_name1)
+    full_api_name2 = re.sub("[^0-9a-zA-Z_.]", "", full_api_name2)
     class_name1, method_name1 = split_java_class_method_names(full_api_name1)
     class_name2, method_name2 = split_java_class_method_names(full_api_name2)
 
     if class_name1 == class_name2:
         class_similarity = 1.0
     else:
-        class_similarity = name_similarity(
-            class_name1, class_name2, min_word_len, equal_thresh
+        class_similarity = java_class_name_similarity(
+            class_name1, class_name2, min_word_len, distance_threshold
         )
 
     # Common method naming conventions that create instance of the caller class
@@ -454,27 +504,27 @@ def java_api_name_similarity(
         "newInstance",
         "create",
     ]
-    if method_name1 in special_method_names:
-        method_name1 = class_name1
-    if method_name2 in special_method_names:
-        method_name2 = class_name2
+    if (method_name1 in special_method_names) and (class_name1):
+        method_name1 = class_name1[0]
+    if (method_name2 in special_method_names) and (class_name2):
+        method_name2 = class_name2[0]
     if method_name1 == method_name2:
         method_similarity = 1.0
     else:
-        method_similarity = name_similarity(
-            method_name1, method_name2, min_word_len, equal_thresh
+        method_similarity = java_method_name_similarity(
+            method_name1, method_name2, min_word_len, distance_threshold
         )
 
     return class_similarity, method_similarity
 
 
-def offset_similarity(offset1: int, offset2: int):
+def offset_similarity(offset1: int, offset2: int) -> float:
     dis = abs(offset1 - offset2)
     # add 1 to avoid zero division error
     return 1 / (dis + 1)
 
 
-def arguments_similarity(arguments1: list[dict], arguments2: list[dict]):
+def arguments_similarity(arguments1: list[dict], arguments2: list[dict]) -> float:
     func = lambda arguments: [arg["value"] for arg in arguments]
     arguments1 = func(arguments1)
     arguments2 = func(arguments2)
@@ -488,15 +538,20 @@ def java_api_call_similarity(
     api_call1: dict,
     api_call2: dict,
     weights: list[float] = [0.3, 0.3, 0.2, 0.2],
-    min_word_len: int = 2,
-    equal_thresh: float = 0.8,
-):
+    min_word_len: int = 1,
+    distance_threshold: int = 1,
+) -> float:
     assert len(weights) == 4
     full_name1 = api_call1["full_name"]
     full_name2 = api_call2["full_name"]
     class_sim, method_sim = java_api_name_similarity(
-        full_name1, full_name2, min_word_len, equal_thresh
+        full_name1, full_name2, min_word_len, distance_threshold
     )
+    if math.isclose(class_sim, 0.0):
+        return 0.0
+    if math.isclose(method_sim, 0.0):
+        return 0.0
+
     offset1 = api_call1["offset"]
     offset2 = api_call2["offset"]
     offset_sim = offset_similarity(offset1, offset2)
@@ -509,8 +564,13 @@ def java_api_call_similarity(
         + weights[1] * method_sim
         + weights[2] * offset_sim
         + weights[3] * arg_sim
-    ) / sum(weights)
+    )
+
     return overall_sim
+
+
+def gte(a: float, b: float, rel_tol=1e-09, abs_tol=0.0) -> bool:
+    return math.isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol) or (a > b)
 
 
 def mine_java_api_update_instance(
@@ -518,9 +578,10 @@ def mine_java_api_update_instance(
     sim_threshold: float = 0.7,
     num_neighbors: int = 3,
     weights: list[float] = [0.3, 0.3, 0.2, 0.2],
-    min_word_len: int = 2,
-    equal_thresh: float = 0.8,
+    min_word_len: int = 1,
+    distance_threshold: int = 1,
 ):
+    assert len(weights) == 4
     api_update_pairs = []
     for api_calls in doc["api_calls"]:
         caller = api_calls["caller"]
@@ -535,12 +596,12 @@ def mine_java_api_update_instance(
             )[:num_neighbors]
             for old_callee in candidate_old_callees:
                 sim_score = java_api_call_similarity(
-                    new_callee, old_callee, weights, min_word_len, equal_thresh
+                    new_callee, old_callee, weights, min_word_len, distance_threshold
                 )
-                if sim_score > max_sim_score:
+                if gte(sim_score, max_sim_score):
                     max_sim_score = sim_score
                     best_candidate = old_callee
-            if max_sim_score >= sim_threshold:
+            if gte(max_sim_score, sim_threshold):
                 api_update_pairs.append(
                     {
                         "caller": caller,
@@ -565,7 +626,7 @@ def mine_java_api_update_instance(
         return res
 
 
-def mine_all(lang: str, n_jobs: int = 1):
+def mine_all(lang: str):
     client = MongoClient("127.0.0.1", 27017)
     db = client["api_update"]
     api_call_changes_col = db[f"{lang}_api_call_changes"]
@@ -573,9 +634,9 @@ def mine_all(lang: str, n_jobs: int = 1):
     print(f"{lang}: {len(docs)} api call change records")
     if lang == "java":
         miner = mine_java_api_update_instance
-    res = Parallel(n_jobs=n_jobs, backend="multiprocessing")(
-        delayed(miner)(doc) for doc in tqdm(docs)
-    )
+    res = []
+    for doc in tqdm(docs):
+        res.append(miner(doc))
     if lang == "java":
         releases_filepath = "../benchmark/updates/maven_releases.json"
         releases_info = json.load(open(releases_filepath))
@@ -644,4 +705,4 @@ if __name__ == "__main__":
         get_nearby_apis("java", args.n_jobs, args.batch_size)
 
     if args.java:
-        mine_all("java", args.n_jobs)
+        mine_all("java")
