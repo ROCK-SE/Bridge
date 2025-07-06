@@ -17,7 +17,7 @@ from parse_api_calls import parse_imports_java
 from pymongo import MongoClient
 from tqdm.auto import tqdm
 from tree_sitter import Language, Node, Parser
-from utils import insert_many_skip_large
+from utils import cal_sample_size, insert_many_skip_large
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -729,6 +729,81 @@ def extract(dest_folder: str, n_jobs: int = 1, batch_size: int = 100):
     save_col.create_index("package")
 
 
+def sample_api_pairs_by_occurences():
+    col = db["java_existent_api_update_instances"]
+    api_update_instances = []
+    for doc in tqdm(col.find({}), total=col.estimated_document_count()):
+        commit = doc["commit"]
+        filepath = doc["filepath"]
+        old_blob = doc["old_blob"]
+        new_blob = doc["new_blob"]
+        package = doc["package"]
+        version_before = doc["version_before"]
+        version_after = doc["version_after"]
+        for pair in doc["api_update_pairs"]:
+            old_callee = pair["old_callee"]
+            old_full_name = old_callee["full_name"]
+            old_parameter_types = f"({', '.join(old_callee['parameter_types'])})"
+            old_api = old_full_name + old_parameter_types
+            old_body = old_callee["body"]
+
+            new_callee = pair["new_callee"]
+            new_full_name = new_callee["full_name"]
+            new_parameter_types = f"({', '.join(new_callee['parameter_types'])})"
+            new_api = new_full_name + new_parameter_types
+            new_body = new_callee["body"]
+            api_update_instances.append(
+                [
+                    commit,
+                    filepath,
+                    old_blob,
+                    new_blob,
+                    package,
+                    version_before,
+                    version_after,
+                    old_api,
+                    new_api,
+                    old_body,
+                    new_body,
+                ]
+            )
+    api_update_instances = pd.DataFrame(
+        api_update_instances,
+        columns=[
+            "commit",
+            "filepath",
+            "old_blob",
+            "new_blob",
+            "package",
+            "version_before",
+            "version_after",
+            "old_api",
+            "new_api",
+            "old_body",
+            "new_body",
+        ],
+    )
+    print(f"{len(api_update_instances)} API update instances")
+    api_update_pairs = (
+        api_update_instances[["old_api", "new_api"]]
+        .value_counts()
+        .to_frame()
+        .reset_index()
+    )
+    api_update_pairs.to_csv("../benchmark/final/java_api_update_pairs.csv", index=False)
+    print(f"{len(api_update_pairs)} API update pairs, the most frequently pairs are:")
+    print(api_update_pairs.head())
+
+    sample_size = cal_sample_size(len(api_update_pairs))
+    samples = api_update_pairs.sample(
+        sample_size, weights=api_update_pairs["count"], random_state=42
+    )
+    samples = samples.merge(api_update_instances).drop_duplicates(
+        ["old_api", "new_api"], keep="first"
+    )
+    samples.to_csv("../benchmark/final/sampled_java_api_update_pairs.csv", index=False)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="python java_api_update_validator.py",
@@ -750,6 +825,12 @@ if __name__ == "__main__":
         type=str,
         help="the folder to store downloaded sources jars",
     )
+    parser.add_argument(
+        "-s",
+        "--sample",
+        action="store_true",
+        help="sample API update pairs",
+    )
 
     args = parser.parse_args()
 
@@ -758,3 +839,6 @@ if __name__ == "__main__":
 
     if args.check:
         extract(args.dest_folder, args.n_jobs)
+
+    if args.sample:
+        sample_api_pairs_by_occurences()

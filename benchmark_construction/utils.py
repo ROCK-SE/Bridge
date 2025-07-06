@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 from pymongo.collection import Collection
+from scipy.stats import norm
 from woc.local import WocMapsLocal
 
 logger = logging.getLogger(__name__)
@@ -323,6 +324,19 @@ def literals_to_scala_type(value: str, type_literal: str) -> str:
     if type_literal == "null_literal":
         return "Null"
     return type_literal
+
+
+def cal_sample_size(
+    population_size, margin_error=0.05, confidence_level=0.95, sigma=1 / 2
+):
+    # https://github.com/shawnohare/samplesize/blob/master/samplesize.py
+    alpha = 1 - (confidence_level)
+    z = norm.ppf(1 - (alpha / 2))
+    N = population_size
+    M = margin_error
+    numerator = z**2 * sigma**2 * (N / (N - 1))
+    denom = M**2 + ((z**2 * sigma**2) / (N - 1))
+    return int(numerator / denom + 0.5)
 
 
 def get_soup(url: str) -> BeautifulSoup:
