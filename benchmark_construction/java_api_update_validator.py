@@ -59,6 +59,14 @@ def download_sources_jar(row, dest_folder: str):
     package = row["package"]
     version = row["version"]
     url, save_path = gen_sources_jar_path(package, version, dest_folder)
+    if os.path.exists(save_path):
+        logger.info(f"Sources Jar Already Downloaded: {package} {version}")
+        try:
+            zipfile.ZipFile(save_path)
+            return
+        except:
+            logger.error(f"Bad Sources Jar: {package} {version}")
+            pass
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     try:
