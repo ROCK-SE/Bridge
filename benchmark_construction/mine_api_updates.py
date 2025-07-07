@@ -385,7 +385,7 @@ def split_java_class_method_names(full_api_name: str) -> tuple[list[str], str]:
     return parts[i:-1], parts[-1]
 
 
-def custom_equal(p1: str, p2: str, distance_threshold: int = 1) -> bool:
+def java_custom_equal(p1: str, p2: str, distance_threshold: int = 1) -> bool:
     if p1 == p2:
         return True
     if p1.startswith(p2) or p2.startswith(p1):
@@ -404,7 +404,7 @@ def _name_similarity(
     num_common_parts = 0
     for p1 in parts1:
         for p2 in parts2:
-            if custom_equal(p1, p2, distance_threshold):
+            if java_custom_equal(p1, p2, distance_threshold):
                 parts2.remove(p2)
                 num_common_parts += 1
                 break
@@ -524,7 +524,7 @@ def offset_similarity(offset1: int, offset2: int) -> float:
     return 1 / (dis + 1)
 
 
-def arguments_similarity(arguments1: list[dict], arguments2: list[dict]) -> float:
+def java_arguments_similarity(arguments1: list[dict], arguments2: list[dict]) -> float:
     func = lambda arguments: [arg["value"] for arg in arguments]
     arguments1 = func(arguments1)
     arguments2 = func(arguments2)
@@ -557,7 +557,7 @@ def java_api_call_similarity(
     offset_sim = offset_similarity(offset1, offset2)
     arguments1 = api_call1["arguments"]
     arguments2 = api_call2["arguments"]
-    arg_sim = arguments_similarity(arguments1, arguments2)
+    arg_sim = java_arguments_similarity(arguments1, arguments2)
 
     overall_sim = (
         weights[0] * class_sim
