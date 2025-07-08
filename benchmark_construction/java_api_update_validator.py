@@ -785,7 +785,7 @@ def sample_api_pairs_by_occurences():
     )
     print(f"{len(api_update_instances)} API update instances")
     api_update_pairs = (
-        api_update_instances[["old_api", "new_api"]]
+        api_update_instances[["package", "old_api", "new_api"]]
         .value_counts()
         .to_frame()
         .reset_index()
@@ -799,7 +799,7 @@ def sample_api_pairs_by_occurences():
         sample_size, weights=api_update_pairs["count"], random_state=42
     )
     samples = samples.merge(api_update_instances).drop_duplicates(
-        ["old_api", "new_api"], keep="first"
+        ["package", "old_api", "new_api"], keep="first"
     )
     samples.to_csv("../benchmark/final/sampled_java_api_update_pairs.csv", index=False)
 
