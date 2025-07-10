@@ -389,6 +389,21 @@ def java_name_similarity(parts1: list[str], parts2: list[str]) -> float:
     if parts1 == parts2:
         return 1.0
 
+    types = [
+        "int",
+        "long",
+        "byte",
+        "short",
+        "float",
+        "double",
+        "boolean",
+        "char",
+        "string",
+    ]
+    t1 = [k for k in parts1 if k in types]
+    t2 = [k for k in parts1 if k in types]
+    if t1 != t2:
+        return 0.0
     total = len(parts1) + len(parts2)
     num_common_parts = 0
     for p1 in parts1:
@@ -795,7 +810,7 @@ def python_api_call_similarity(
     full_name1 = api_call1["full_name"]
     full_name2 = api_call2["full_name"]
     name_sim = python_api_name_similarity(full_name1, full_name2, min_word_len)
-    if math.isclose(name_sim, 0.0):
+    if not gte(name_sim, 0.5):
         return 0.0
 
     offset1 = api_call1["offset"]
@@ -868,11 +883,18 @@ def mine_all(lang: str):
     db = client["api_update"]
     api_call_changes_col = db[f"{lang}_api_call_changes"]
     docs = list(api_call_changes_col.find({}))
-    print(f"{lang}: {len(docs)} api call change records")
+
     if lang == "java":
         miner = mine_java_api_update_instance
     elif lang == "py":
         miner = mine_python_api_update_instance
+        dep_update_commits = [
+            doc["commit"] for doc in db["py_dependency_updates"].find({})
+        ]
+        print(f"{lang}: {len(docs)} api call change records before")
+        docs = pd.DataFrame(docs)
+        docs = docs[docs["commit"].isin(dep_update_commits)].to_dict("records")
+    print(f"{lang}: {len(docs)} api call change records")
     res = []
     for doc in tqdm(docs):
         res.append(miner(doc))
