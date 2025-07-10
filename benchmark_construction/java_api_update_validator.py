@@ -640,6 +640,40 @@ def arg_num_match(api: dict, num_args: int) -> bool:
     return num_paras == num_args
 
 
+def remove_same_call(api_update_pairs: list[dict]):
+    new_api_update_pairs = []
+    for pair in api_update_pairs:
+        old_callee = pair["old_callee"]
+        old_full_name = old_callee["full_name"]
+        old_body = old_callee["body"]
+        old_filepath = old_callee["filepath"]
+
+        new_callee = pair["new_callee"]
+        new_full_name = new_callee["full_name"]
+        new_body = new_callee["body"]
+        new_filepath = new_callee["filepath"]
+
+        # One API is an interface and the other api implements its method
+        if (len(new_body) == 0) and (len(old_body) > 0):
+            continue
+        if (len(new_body) > 0) and (len(old_body) == 0):
+            continue
+
+        # One API is the other API's subclass and it directly calls method defined
+        # in the parent class. Remove this case
+        if old_filepath == new_filepath:
+            old_class_name, old_method_name = old_full_name.rsplit(".", 1)
+            new_class_name, new_method_name = new_full_name.rsplit(".", 1)
+            if (old_class_name != new_class_name) and (
+                old_method_name == new_method_name
+            ):
+                continue
+
+        new_api_update_pairs.append(pair)
+
+    return new_api_update_pairs
+
+
 def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
     package = doc["package"]
     version_before = doc["version_before"]
@@ -653,10 +687,10 @@ def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
         logger.error(f"Sources Jar Not Found: {package} {version_after}")
         return
 
+    update_pairs_with_method_body = []
     with zipfile.ZipFile(old_sources_jar_path) as old_sources_jar, zipfile.ZipFile(
         new_sources_jar_path
     ) as new_sources_jar:
-        update_pairs_with_method_body = []
         for pair in doc["api_update_pairs"]:
             old_callee = pair["old_callee"]
             old_api_name = old_callee["full_name"]
@@ -706,14 +740,21 @@ def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
                     "similarity_score": pair["similarity_score"],
                 }
             )
-        if update_pairs_with_method_body:
-            return doc | {
-                "api_update_pairs": update_pairs_with_method_body,
-            }
+    new_update_pairs = remove_same_call(update_pairs_with_method_body)
+    if new_update_pairs:
+        return doc | {
+            "api_update_pairs": update_pairs_with_method_body,
+        }
 
 
 def extract(dest_folder: str, n_jobs: int = 1, batch_size: int = 100):
-    docs = list(col.find({}, projection={"_id": 0}))
+    docs = [
+        doc
+        for doc in col.find({}, projection={"_id": 0})
+        if not doc["package"].startswith(
+            ("com.azure", "com.alibaba.fastjson2", "com.alibaba:fastjson")
+        )
+    ]
     print(len(docs), "docs to be processed")
     res = Parallel(n_jobs=n_jobs, backend="multiprocessing")(
         delayed(extract_method_body_per_doc)(doc, dest_folder)
@@ -752,6 +793,7 @@ def sample_api_pairs_by_occurences():
             new_parameter_types = f"({', '.join(new_callee['parameter_types'])})"
             new_api = new_full_name + new_parameter_types
             new_body = new_callee["body"]
+
             api_update_instances.append(
                 [
                     commit,
@@ -825,12 +867,6 @@ if __name__ == "__main__":
         type=str,
         help="the folder to store downloaded sources jars",
     )
-    parser.add_argument(
-        "-s",
-        "--sample",
-        action="store_true",
-        help="sample API update pairs",
-    )
 
     args = parser.parse_args()
 
@@ -839,6 +875,3 @@ if __name__ == "__main__":
 
     if args.check:
         extract(args.dest_folder, args.n_jobs)
-
-    if args.sample:
-        sample_api_pairs_by_occurences()
