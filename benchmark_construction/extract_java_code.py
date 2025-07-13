@@ -177,7 +177,7 @@ def extract_code(
                     cur_node = match_node
                     start_line = match_node.start_point[0]
                     end_line = match_node.end_point[0]
-                    res.append("\n".join(source_lines[start_line:end_line]))
+                    res.append("\n".join(source_lines[start_line : end_line + 1]))
                     i += 1
                     break
             if not found:
@@ -197,7 +197,7 @@ def extract_code(
                     cur_node = match_node
                     start_line = match_node.start_point[0]
                     end_line = match_node.end_point[0]
-                    res.append("\n".join(source_lines[start_line:end_line]))
+                    res.append("\n".join(source_lines[start_line : end_line + 1]))
                     i += 1
                     break
             if not found:
@@ -212,10 +212,8 @@ def extract_code_commit_pair(row):
     col = db["java_existent_api_update_instances"]
 
     package = row["package"]
-    old_api_full_name = row["old_api_full_name"]
-    old_params = row["old_params"]
-    new_api_full_name = row["new_api_full_name"]
-    new_params = row["new_params"]
+    old_api = row["old_api"]
+    new_api = row["new_api"]
     old_version = row["old_version"]
     new_version = row["new_version"]
     commit = row["commit"]
@@ -241,19 +239,16 @@ def extract_code_commit_pair(row):
                 old_callee_params = ""
             else:
                 old_callee_params = f"({', '.join(old_callee['parameter_types'])})"
+            old_callee_api = old_callee_full_name + old_callee_params
             new_callee = pair["new_callee"]
             new_callee_full_name = new_callee["full_name"]
             if new_callee["parameter_types"] == "":
                 new_callee_params = ""
             else:
                 new_callee_params = f"({', '.join(new_callee['parameter_types'])})"
+            new_callee_api = new_callee_full_name + new_callee_params
             if (version_before == old_version) and (version_after == new_version):
-                if (
-                    (old_callee_full_name == old_api_full_name)
-                    and (old_callee_params == old_params)
-                    and (new_callee_full_name == new_api_full_name)
-                    and (new_callee_params == new_params)
-                ):
+                if (old_callee_api == old_api) and (new_callee_api == new_api):
                     old_code = extract_code(
                         old_source.decode(errors="ignore"),
                         old_root_node,
@@ -273,12 +268,7 @@ def extract_code_commit_pair(row):
                     res.append(row | {"old_code": old_code, "new_code": new_code})
 
             if (version_before == new_version) and (version_after == old_version):
-                if (
-                    (old_callee_full_name == new_api_full_name)
-                    and (old_callee_params == new_params)
-                    and (new_callee_full_name == old_api_full_name)
-                    and (new_callee_params == old_params)
-                ):
+                if (old_callee_api == new_api) and (new_callee_api == old_api):
                     old_code = extract_code(
                         old_source.decode(errors="ignore"),
                         old_root_node,
