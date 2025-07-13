@@ -1,5 +1,6 @@
 import argparse
 import logging
+import math
 import os
 import random
 import sys
@@ -611,33 +612,105 @@ def extract_apis(
     return []
 
 
-def arg_num_match(api: dict, num_args: int) -> bool:
+def literals_to_java_type(value: str, type_literal: str) -> str:
+    if not type_literal.endswith("_literal"):
+        return type_literal
+    if type_literal in [
+        "decimal_integer_literal",
+        "hex_integer_literal",
+        "octal_integer_literal",
+        "binary_integer_literal",
+    ]:
+        if value[-1].lower() == "l":
+            return "long"
+        return "int"
+    if type_literal in ["decimal_floating_point_literal", "ex_floating_point_literal"]:
+        if value[-1].lower() == "f":
+            return "float"
+        return "double"
+    if type_literal in ["true", "false"]:
+        return "boolean"
+    if type_literal == "character_literal":
+        return "char"
+    if type_literal == "string_literal":
+        return "String"
+    if type_literal == "null_literal":
+        return "null"
+    return type_literal
+
+
+def literals_to_scala_type(value: str, type_literal: str) -> str:
+    if not type_literal.endswith("_literal"):
+        return type_literal
+    if type_literal in [
+        "decimal_integer_literal",
+        "hex_integer_literal",
+        "octal_integer_literal",
+        "binary_integer_literal",
+    ]:
+        if value[-1].lower() == "l":
+            return "Long"
+        return "Int"
+    if type_literal in ["decimal_floating_point_literal", "ex_floating_point_literal"]:
+        if value[-1].lower() == "f":
+            return "Float"
+        return "Double"
+    if type_literal in ["true", "false"]:
+        return "Boolean"
+    if type_literal == "character_literal":
+        return "Char"
+    if type_literal == "string_literal":
+        return "String"
+    if type_literal == "null_literal":
+        return "Null"
+    return type_literal
+
+
+def arg_sim(api: dict, arguments: list[dict]) -> float:
     para_types = api["parameter_types"]
     filepath = api["filepath"]
     var_symbol = "@"
     if filepath.endswith(".java"):
+        arg_types = [
+            literals_to_java_type(arg["value"], arg["value_type"]) for arg in arguments
+        ]
         var_symbol = "..."
     elif filepath.endswith(".scala"):
         var_symbol = "*"
+        arg_types = [
+            literals_to_scala_type(arg["value"], arg["value_type"]) for arg in arguments
+        ]
     num_paras = len(para_types)
+    num_args = len(arg_types)
 
     # param_types = []
     if num_paras == 0:
         # arg_types != [], mismatch
         if num_args != 0:
-            return False
+            return -1.0
         # arg_types == [], match
-        return True
+        return 1.0
 
     # In the spread parameter case, num_args can be num_paras-1, num_paras, ...
     # In other cases, num_args = num_paras
-    # Therefore, num_args should be greater or equal to num_args - 1
-    if para_types[-1].endswith(var_symbol):
-        if num_args >= (num_paras - 1):
-            return True
-        return False
+    # Therefore, num_args should be greater or equal to num_paras - 1
+    if num_args < (num_paras - 1):
+        return -1.0
 
-    return num_paras == num_args
+    num_match_type = 0
+    for i in range(num_paras - 1):
+        if para_types[i] == arg_types[i]:
+            num_match_type += 1
+
+    if para_types[-1].endswith(var_symbol):
+        if (num_args >= num_paras) and (para_types[-1] == arg_types[num_paras - 1]):
+            num_match_type += 1
+    else:
+        if num_args != num_paras:
+            return -1.0
+        if para_types[-1] == arg_types[-1]:
+            num_match_type += 1
+    return num_match_type / num_paras
 
 
 def remove_same_call(api_update_pairs: list[dict]):
@@ -694,7 +767,6 @@ def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
         for pair in doc["api_update_pairs"]:
             old_callee = pair["old_callee"]
             old_api_name = old_callee["full_name"]
-            num_old_args = len(old_callee["arguments"])
             logger.info(f"Checking {package} {version_before} {old_api_name} ...")
             try:
                 old_apis = extract_apis(old_sources_jar, old_api_name)
@@ -704,17 +776,23 @@ def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
                 )
                 continue
             old_matches_api = None
+            max_match_sim = -0.5
             for api in old_apis:
-                if arg_num_match(api, num_old_args):
+                sim = arg_sim(api, old_callee["arguments"])
+                if sim > max_match_sim:
+                    max_match_sim = sim
                     old_matches_api = api
-                    break
             if old_matches_api is None:
                 logger.error(f"Parameter Not Match: {old_api_name}")
                 continue
 
+            # If the number of arguments match, but we can not match the type
+            # we conservatively set the prameter types as empty
+            if math.isclose(max_match_sim, 0):
+                old_matches_api["parameter_types"] = ""
+
             new_callee = pair["new_callee"]
             new_api_name = new_callee["full_name"]
-            num_new_args = len(new_callee["arguments"])
             logger.info(f"Checking {package} {version_after} {new_api_name} ...")
             try:
                 new_apis = extract_apis(new_sources_jar, new_api_name)
@@ -723,14 +801,20 @@ def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
                     f"RecursionError: {package} {version_after} {new_api_name}"
                 )
                 continue
+
             new_matches_api = None
+            max_match_sim = -0.5
             for api in new_apis:
-                if arg_num_match(api, num_new_args):
+                sim = arg_sim(api, new_callee["arguments"])
+                if sim > max_match_sim:
+                    max_match_sim = sim
                     new_matches_api = api
-                    break
             if new_matches_api is None:
                 logger.error(f"Parameter Not Match: {new_api_name}")
                 continue
+
+            if math.isclose(max_match_sim, 0):
+                new_matches_api["parameter_types"] = ""
 
             update_pairs_with_method_body.append(
                 {
@@ -768,82 +852,6 @@ def extract(dest_folder: str, n_jobs: int = 1, batch_size: int = 100):
     insert_many_skip_large(save_col, res)
     save_col.create_index("commit")
     save_col.create_index("package")
-
-
-def sample_api_pairs_by_occurences():
-    col = db["java_existent_api_update_instances"]
-    api_update_instances = []
-    for doc in tqdm(col.find({}), total=col.estimated_document_count()):
-        commit = doc["commit"]
-        filepath = doc["filepath"]
-        old_blob = doc["old_blob"]
-        new_blob = doc["new_blob"]
-        package = doc["package"]
-        version_before = doc["version_before"]
-        version_after = doc["version_after"]
-        for pair in doc["api_update_pairs"]:
-            old_callee = pair["old_callee"]
-            old_full_name = old_callee["full_name"]
-            old_parameter_types = f"({', '.join(old_callee['parameter_types'])})"
-            old_api = old_full_name + old_parameter_types
-            old_body = old_callee["body"]
-
-            new_callee = pair["new_callee"]
-            new_full_name = new_callee["full_name"]
-            new_parameter_types = f"({', '.join(new_callee['parameter_types'])})"
-            new_api = new_full_name + new_parameter_types
-            new_body = new_callee["body"]
-
-            api_update_instances.append(
-                [
-                    commit,
-                    filepath,
-                    old_blob,
-                    new_blob,
-                    package,
-                    version_before,
-                    version_after,
-                    old_api,
-                    new_api,
-                    old_body,
-                    new_body,
-                ]
-            )
-    api_update_instances = pd.DataFrame(
-        api_update_instances,
-        columns=[
-            "commit",
-            "filepath",
-            "old_blob",
-            "new_blob",
-            "package",
-            "version_before",
-            "version_after",
-            "old_api",
-            "new_api",
-            "old_body",
-            "new_body",
-        ],
-    )
-    print(f"{len(api_update_instances)} API update instances")
-    api_update_pairs = (
-        api_update_instances[["package", "old_api", "new_api"]]
-        .value_counts()
-        .to_frame()
-        .reset_index()
-    )
-    api_update_pairs.to_csv("../benchmark/final/java_api_update_pairs.csv", index=False)
-    print(f"{len(api_update_pairs)} API update pairs, the most frequently pairs are:")
-    print(api_update_pairs.head())
-
-    sample_size = cal_sample_size(len(api_update_pairs))
-    samples = api_update_pairs.sample(
-        sample_size, weights=api_update_pairs["count"], random_state=42
-    )
-    samples = samples.merge(api_update_instances).drop_duplicates(
-        ["package", "old_api", "new_api"], keep="first"
-    )
-    samples.to_csv("../benchmark/final/sampled_java_api_update_pairs.csv", index=False)
 
 
 if __name__ == "__main__":
