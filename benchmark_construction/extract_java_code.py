@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 
 import pandas as pd
 from joblib import Parallel, delayed
+from parse_api_calls import parse_api_calls_java
 from pymongo import MongoClient
 from tqdm import tqdm
 
@@ -206,6 +207,20 @@ def extract_code(
     return "\n".join(related_imports + res + end_brackets)
 
 
+def extract_arguments(source, api: str):
+    api_full_name = api.split("(")[0]
+    res = []
+    api_calls = parse_api_calls_java(source).get("api_calls", [])
+    for api_call in api_calls:
+        for callee in api_call["callee"]:
+            full_name = callee["full_name"]
+            if api_full_name != full_name:
+                continue
+            arguments = [arg["value"] for arg in callee["arguments"]]
+            res.append(arguments)
+    return res
+
+
 def extract_code_commit_pair(row):
     client = MongoClient("127.0.0.1", 27017)
     db = client["api_update"]
@@ -257,6 +272,9 @@ def extract_code_commit_pair(row):
                     )
                     if old_code is None:
                         continue
+                    old_args = extract_arguments(old_code, old_api)
+                    if not old_args:
+                        continue
                     new_code = extract_code(
                         new_source.decode(errors="ignore"),
                         new_root_node,
@@ -265,7 +283,18 @@ def extract_code_commit_pair(row):
                     )
                     if new_code is None:
                         continue
-                    res.append(row | {"old_code": old_code, "new_code": new_code})
+                    new_args = extract_arguments(new_code, new_api)
+                    if not new_args:
+                        continue
+                    res.append(
+                        row
+                        | {
+                            "old_code": old_code,
+                            "old_args": old_args,
+                            "new_code": new_code,
+                            "new_args": new_args,
+                        }
+                    )
 
             if (version_before == new_version) and (version_after == old_version):
                 if (old_callee_api == new_api) and (new_callee_api == old_api):
@@ -277,6 +306,9 @@ def extract_code_commit_pair(row):
                     )
                     if old_code is None:
                         continue
+                    old_args = extract_arguments(old_code, new_api)
+                    if not old_args:
+                        continue
                     new_code = extract_code(
                         new_source.decode(errors="ignore"),
                         new_root_node,
@@ -285,7 +317,18 @@ def extract_code_commit_pair(row):
                     )
                     if new_code is None:
                         continue
-                    res.append(row | {"old_code": new_code, "new_code": old_code})
+                    new_args = extract_arguments(new_code, old_api)
+                    if not new_args:
+                        continue
+                    res.append(
+                        row
+                        | {
+                            "old_code": new_code,
+                            "old_args": new_args,
+                            "new_code": old_code,
+                            "new_args": old_args,
+                        }
+                    )
     return res
 
 
