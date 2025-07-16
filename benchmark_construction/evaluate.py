@@ -127,10 +127,11 @@ if __name__ == "__main__":
 
     for lang in args.lang.split(","):
         for model in args.model.split(","):
-            for group in args.group.split(","):
-                if args.pair:
+            if args.pair:
+                for group in args.group.split(","):
                     print(f"Evaluating {model} on {lang} {group} pair dataset")
                     pairs_main(model, lang, group, args.batch_size)
-                if args.instance:
-                    print(f"Evaluating {model} on {lang} {group} instance dataset")
-                    instance_main(model, lang, group)
+            if args.instance:
+                group = "exact"
+                print(f"Evaluating {model} on {lang} {group} instance dataset")
+                instance_main(model, lang, group)
