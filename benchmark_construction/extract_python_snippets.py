@@ -55,7 +55,7 @@ def select_blob_index():
     blobs = list(set(blobs))
     related_blobs_index = {b: blob_index[b] for b in blobs}
     with open("../benchmark/final/py_blob_index.json", "w") as outf:
-        json.dump(related_blobs_index, outf)
+        json.dump(related_blobs_index, outf, indent=2)
 
 
 if not os.path.exists("../benchmark/final/py_blob_index.json"):
@@ -295,7 +295,9 @@ def extract_code_commit_pair(row):
 
 
 def extract_main(n_jobs: int = 1):
-    commit_pairs_full = json.load(open("../benchmark/final/py_commit_pairs_full.json"))
+    commit_pairs_full = json.load(
+        open("../benchmark/final/python_commit_pairs_full.json")
+    )
     print(len(commit_pairs_full), "commit pairs for full rules")
 
     res = Parallel(n_jobs=n_jobs, backend="multiprocessing")(
@@ -304,17 +306,23 @@ def extract_main(n_jobs: int = 1):
     final = []
     for r in res:
         final.extend(r)
-    with open("../benchmark/final/py_update_instances_full.json", "w") as outf:
-        json.dump(final, outf)
+    with open("../benchmark/final/python_update_instances_full.json", "w") as outf:
+        json.dump(final, outf, indent=2)
 
-    instances_full = pd.read_json("../benchmark/final/py_update_instances_full.json")
+    instances_full = pd.read_json(
+        "../benchmark/final/python_update_instances_full.json"
+    )
     print(f"{len(instances_full)} update instances for full rules")
-    commit_pairs_exact = pd.read_json("../benchmark/final/py_commit_pairs_exact.json")
+    commit_pairs_exact = pd.read_json(
+        "../benchmark/final/python_commit_pairs_exact.json"
+    )
     print(f"{len(commit_pairs_exact)} commit pairs for correct verified rules")
     instances_exact = commit_pairs_exact.merge(instances_full)
     print(f"{len(instances_exact)} update instances for correct verified rules")
     instances_exact.to_json(
-        "../benchmark/final/py_update_instances_exact.json", orient="records"
+        "../benchmark/final/python_update_instances_exact.json",
+        indent=2,
+        orient="records",
     )
 
 
