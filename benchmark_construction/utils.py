@@ -89,7 +89,7 @@ def list_pypi_packages(retry: int = 5) -> list[str] | None:
             packages = [canonicalize_name(proj["name"]) for proj in projects]
             packages = list(set(packages))
             print(f"{len(packages)} PyPI packages")
-            with open("pypi_packages.csv", "w") as outf:
+            with open("../benchmark/updates/all_pypi_packages.csv", "w") as outf:
                 for pkg in packages:
                     outf.write(f"{pkg}\n")
             return packages

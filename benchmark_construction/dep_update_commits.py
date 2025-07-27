@@ -14,17 +14,21 @@ CONFIG_TYPES = [
     "pom.xml",
 ]
 
-if os.path.exists("./pypi_packages.csv"):
-    PYPI_PACKAGES = open("./pypi_packages.csv").read().splitlines()
+if os.path.exists("../benchmark/updates/all_pypi_packages.csv"):
+    PYPI_PACKAGES = (
+        open("../benchmark/updates/all_pypi_packages.csv").read().splitlines()
+    )
 else:
     PYPI_PACKAGES = list_pypi_packages()
 
-if os.path.exists("./maven_packages.csv"):
-    MAVEN_PACKAGES = open("./maven_packages.csv").read().splitlines()
+if os.path.exists("../benchmark/updates/all_maven_packages.csv"):
+    MAVEN_PACKAGES = (
+        open("../benchmark/updates/all_maven_packages.csv").read().splitlines()
+    )
 else:
     raise Exception(
-        "maven_packages.csv does not exists. Please obtain it from deps.dev BigQuery dataset: https://docs.deps.dev/bigquery/v1/.\n"
-        "Use the following SQL query and save the results to maven_packages.csv:\n"
+        "all_maven_packages.csv does not exists. Please obtain it from deps.dev BigQuery dataset: https://docs.deps.dev/bigquery/v1/.\n"
+        "Use the following SQL query and save the results to all_maven_packages.csv:\n"
         'SELECT DISTINCT Name FROM `bigquery-public-data.deps_dev_v1.PackageVersions` WHERE System = "MAVEN"',
     )
 
