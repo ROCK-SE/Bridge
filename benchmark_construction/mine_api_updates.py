@@ -8,7 +8,7 @@ import sys
 
 import pandas as pd
 from joblib import Parallel, delayed
-from Levenshtein import distance, ratio
+from Levenshtein import ratio
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from tqdm.auto import tqdm, trange

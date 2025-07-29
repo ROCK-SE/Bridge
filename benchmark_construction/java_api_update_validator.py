@@ -18,7 +18,7 @@ from parse_api_calls import parse_imports_java
 from pymongo import MongoClient
 from tqdm.auto import tqdm
 from tree_sitter import Language, Node, Parser
-from utils import cal_sample_size, insert_many_skip_large
+from utils import insert_many_skip_large
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
