@@ -343,7 +343,7 @@ def extract_main(n_jobs: int = 1):
     for r in res:
         final.extend(r)
     with open("../benchmark/final/java_update_instances_full.json", "w") as outf:
-        json.dump(final, outf)
+        json.dump(final, outf, indent=2)
 
     instances_full = pd.read_json("../benchmark/final/java_update_instances_full.json")
     print(f"{len(instances_full)} update instances for full rules")
@@ -352,14 +352,16 @@ def extract_main(n_jobs: int = 1):
     instances_exact = commit_pairs_exact.merge(instances_full)
     print(f"{len(instances_exact)} update instances for correct verified rules")
     instances_exact.to_json(
-        "../benchmark/final/java_update_instances_exact.json", orient="records"
+        "../benchmark/final/java_update_instances_exact.json",
+        indent=2,
+        orient="records",
     )
 
 
 if __name__ == "__main__":
     parser = ArgumentParser(
-        prog="python extract_java_code.py",
-        description="Extract methods for update pairs",
+        prog="python extract_java_snippets.py",
+        description="Extract methods for Java API update pairs",
     )
     parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
 

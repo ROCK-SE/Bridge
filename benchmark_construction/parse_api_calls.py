@@ -520,8 +520,8 @@ def parse_all(lang: str, n_jobs: int = 1, batch_size: int = 1):
 
 if __name__ == "__main__":
     parser = ArgumentParser(
-        prog="python import_parsing.py",
-        description="Parse imported modules in Java/Python files",
+        prog="python parse_api_calls.py",
+        description="Parse API calls in Java/Python files and store them in MongoDB collections",
     )
     parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
     parser.add_argument(

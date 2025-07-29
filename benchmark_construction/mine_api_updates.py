@@ -947,7 +947,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--nearby",
         action="store_true",
-        help="get nearby apis",
+        help="get api call changes",
     )
     parser.add_argument(
         "--java",

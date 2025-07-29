@@ -329,7 +329,7 @@ def extract_main(n_jobs: int = 1):
 if __name__ == "__main__":
     parser = ArgumentParser(
         prog="python extract_python_snippets.py",
-        description="Extract code snippets for Python update pairs",
+        description="Extract functions for Python update pairs",
     )
     parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
 
