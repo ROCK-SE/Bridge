@@ -1,0 +1,177 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": [
+      "_id",
+      "api_update_pairs",
+      "commit",
+      "filepath",
+      "new_blob",
+      "old_blob",
+      "package",
+      "version_after",
+      "version_before"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "objectId"
+      },
+      "api_update_pairs": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "object",
+          "properties": {
+            "caller": {
+              "bsonType": "array",
+              "items": {
+                "bsonType": "string"
+              }
+            },
+            "new_callee": {
+              "bsonType": "object",
+              "properties": {
+                "arguments": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "object",
+                    "properties": {
+                      "value": {
+                        "bsonType": "string"
+                      },
+                      "value_type": {
+                        "bsonType": "string"
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "value_type"
+                    ]
+                  }
+                },
+                "body": {
+                  "bsonType": "string"
+                },
+                "filepath": {
+                  "bsonType": "string"
+                },
+                "full_name": {
+                  "bsonType": "string"
+                },
+                "offset": {
+                  "bsonType": "int"
+                },
+                "parameter_types": {
+                  "anyOf": [
+                    {
+                      "bsonType": "string"
+                    },
+                    {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "string"
+                      }
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "arguments",
+                "body",
+                "filepath",
+                "full_name",
+                "offset",
+                "parameter_types"
+              ]
+            },
+            "old_callee": {
+              "bsonType": "object",
+              "properties": {
+                "arguments": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "object",
+                    "properties": {
+                      "value": {
+                        "bsonType": "string"
+                      },
+                      "value_type": {
+                        "bsonType": "string"
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "value_type"
+                    ]
+                  }
+                },
+                "body": {
+                  "bsonType": "string"
+                },
+                "filepath": {
+                  "bsonType": "string"
+                },
+                "full_name": {
+                  "bsonType": "string"
+                },
+                "offset": {
+                  "bsonType": "int"
+                },
+                "parameter_types": {
+                  "anyOf": [
+                    {
+                      "bsonType": "string"
+                    },
+                    {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "string"
+                      }
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "arguments",
+                "body",
+                "filepath",
+                "full_name",
+                "offset",
+                "parameter_types"
+              ]
+            },
+            "similarity_score": {
+              "bsonType": "double"
+            }
+          },
+          "required": [
+            "caller",
+            "new_callee",
+            "old_callee",
+            "similarity_score"
+          ]
+        }
+      },
+      "commit": {
+        "bsonType": "string"
+      },
+      "filepath": {
+        "bsonType": "string"
+      },
+      "new_blob": {
+        "bsonType": "string"
+      },
+      "old_blob": {
+        "bsonType": "string"
+      },
+      "package": {
+        "bsonType": "string"
+      },
+      "version_after": {
+        "bsonType": "string"
+      },
+      "version_before": {
+        "bsonType": "string"
+      }
+    }
+  }
+}

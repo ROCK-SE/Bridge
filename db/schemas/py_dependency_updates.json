@@ -1,0 +1,48 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": [
+      "_id",
+      "commit",
+      "filepath",
+      "updated_packages"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "objectId"
+      },
+      "commit": {
+        "bsonType": "string"
+      },
+      "filepath": {
+        "bsonType": "string"
+      },
+      "updated_packages": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "object",
+          "properties": {
+            "name": {
+              "bsonType": "string"
+            },
+            "update_type": {
+              "bsonType": "string"
+            },
+            "version_after": {
+              "bsonType": "string"
+            },
+            "version_before": {
+              "bsonType": "string"
+            }
+          },
+          "required": [
+            "name",
+            "update_type",
+            "version_after",
+            "version_before"
+          ]
+        }
+      }
+    }
+  }
+}

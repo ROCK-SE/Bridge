@@ -1,0 +1,40 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": [
+      "_id",
+      "blob_changes",
+      "commit"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "objectId"
+      },
+      "blob_changes": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "object",
+          "properties": {
+            "filepath": {
+              "bsonType": "string"
+            },
+            "new_blob": {
+              "bsonType": "string"
+            },
+            "old_blob": {
+              "bsonType": "string"
+            }
+          },
+          "required": [
+            "filepath",
+            "new_blob",
+            "old_blob"
+          ]
+        }
+      },
+      "commit": {
+        "bsonType": "string"
+      }
+    }
+  }
+}

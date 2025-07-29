@@ -1,0 +1,84 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": [
+      "_id",
+      "api_calls",
+      "blob",
+      "modules"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "objectId"
+      },
+      "api_calls": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "object",
+          "properties": {
+            "callee": {
+              "bsonType": "array",
+              "items": {
+                "bsonType": "object",
+                "properties": {
+                  "arguments": {
+                    "bsonType": "array",
+                    "items": {
+                      "bsonType": "object",
+                      "properties": {
+                        "arg_type": {
+                          "bsonType": "string"
+                        },
+                        "key": {
+                          "bsonType": "string"
+                        },
+                        "value": {
+                          "bsonType": "string"
+                        },
+                        "value_type": {
+                          "bsonType": "string"
+                        }
+                      },
+                      "required": [
+                        "arg_type",
+                        "value",
+                        "value_type"
+                      ]
+                    }
+                  },
+                  "full_name": {
+                    "bsonType": "string"
+                  },
+                  "offset": {
+                    "bsonType": "int"
+                  }
+                },
+                "required": [
+                  "arguments",
+                  "full_name",
+                  "offset"
+                ]
+              }
+            },
+            "caller": {
+              "bsonType": "string"
+            }
+          },
+          "required": [
+            "callee",
+            "caller"
+          ]
+        }
+      },
+      "blob": {
+        "bsonType": "string"
+      },
+      "modules": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "string"
+        }
+      }
+    }
+  }
+}
