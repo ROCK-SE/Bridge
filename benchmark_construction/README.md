@@ -3,9 +3,7 @@
 Before you proceed, you should first setup the environment for this step by following the instructions in the [INSTALL.md](../INSTALL.md).
 
 ## Commit Filtering
-`filter_commits.py` filters out commits from the `c2fbb` gzipped maps that modify dependency configuration files of interest. We use the V3 version of World of Code whose data was collected in Mid May, 2024. Note that in our experiment time, the `c2fbb` gzipped maps are located at `/da7_data/basemaps/gz`. But their locations may change as the maintenance of World of Code servers.
-
-It has the following command line options:
+`filter_commits.py` filters out commits from the `c2fbb` gzipped maps that modify dependency configuration files of interest. We use the V3 version of World of Code whose data was collected in Mid May, 2024. Note that in our experiment time, the `c2fbb` gzipped maps are located at `/da7_data/basemaps/gz`. But their locations may change as the maintenance of World of Code servers. It has the following command line options:
 ```
 usage: python filter_commits.py [-h] [-f TARGET_FILES] [-s SERVER] [-v VER] [-n NUM_WORKERS] [-u]
 

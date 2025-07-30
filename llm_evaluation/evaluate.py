@@ -115,13 +115,50 @@ def instance_main(model_name: str, lang: str, group: str):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--model", type=str, required=True)
-    parser.add_argument("-p", "--pair", action="store_true")
-    parser.add_argument("-i", "--instance", action="store_true")
-    parser.add_argument("-g", "--group", type=str, required=True)
-    parser.add_argument("-b", "--batch_size", type=int, default=10)
-    parser.add_argument("-l", "--lang", type=str, required=True)
+    parser = argparse.ArgumentParser(
+        prog="python evaluate.py",
+        description="Evaluate LLMs on the recommending replacement API and updating code to a newer dependency version tasks",
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        type=str,
+        required=True,
+        help="a list of model names separated by comma(,)",
+    )
+    parser.add_argument(
+        "-p",
+        "--pair",
+        action="store_true",
+        help="the recommending replacement API task",
+    )
+    parser.add_argument(
+        "-i",
+        "--instance",
+        action="store_true",
+        help="the updating code to a newer dependency version task",
+    )
+    parser.add_argument(
+        "-g",
+        "--group",
+        type=str,
+        required=True,
+        help="groups exact/full separated by comma(,)",
+    )
+    parser.add_argument(
+        "-b",
+        "--batch_size",
+        type=int,
+        default=10,
+        help="the number of API update pairs in each batch request to reduce tokens",
+    )
+    parser.add_argument(
+        "-l",
+        "--lang",
+        type=str,
+        required=True,
+        help="languages java/python separated by comma(,)",
+    )
 
     args = parser.parse_args()
 
