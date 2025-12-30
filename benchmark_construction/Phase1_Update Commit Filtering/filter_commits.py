@@ -46,9 +46,11 @@ def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> N
     print(
         f"{c2fbb_path}: {total} commits modified {', '.join(target_files)} files, {err_line} error line(s)"
     )
-    os.makedirs(os.path.join(save_folder, "commits"), exist_ok=True)
+    os.makedirs(os.path.join(save_folder, "Phase1"), exist_ok=True)
     for fn, data in results.items():
-        save_path = os.path.join(save_folder, "commits", f"{fn}_commits.csv")
+        save_path = os.path.join(
+            save_folder, "Phase1", f"{fn}_candidate_update_commits.csv.{i}"
+        )
         df = pd.DataFrame(
             data,
             columns=["commit", "filepath", "new blob", "old blob"],
@@ -84,14 +86,16 @@ def main(
     update : bool, optional
         whether to perform update, by default False
     """
-    save_folder = "../benchmark"
+    save_folder = "../../benchmark"
     remaining_target_files = []
     # When `update` is set to False, we only process filenames whose result file does not exist
     # Else, we process all filenames
-    os.makedirs(os.path.join(save_folder, "commits"), exist_ok=True)
+    os.makedirs(os.path.join(save_folder, "Phase1"), exist_ok=True)
     if not update:
         for fn in target_files:
-            save_path = os.path.join(save_folder, "commits", f"{fn}_commits.csv")
+            save_path = os.path.join(
+                save_folder, "Phase1", f"{fn}_candidate_update_commits.csv"
+            )
             if os.path.exists(save_path):
                 continue
             remaining_target_files.append(fn)
@@ -104,7 +108,9 @@ def main(
     )
 
     for fn in remaining_target_files:
-        save_path = os.path.join(save_folder, "commits", f"{fn}_commits.csv")
+        save_path = os.path.join(
+            save_folder, "Phase1", f"{fn}_candidate_update_commits.csv"
+        )
         data = []
         for i in range(128):
             df = pd.read_csv(f"{save_path}.{i}")
@@ -143,9 +149,7 @@ if __name__ == "__main__":
         type=str,
         help="the version of c2fbb mappings",
     )
-    parser.add_argument(
-        "-n", "--num_workers", type=int, default=1, help="number of threads"
-    )
+    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
     parser.add_argument(
         "-u", "--update", action="store_true", help="requery if specified"
     )

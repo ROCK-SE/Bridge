@@ -1,4 +1,4 @@
-# LLM for Dependency Update
+# Bridge: Towards Automatically Mining Large-Scale API Mappings and Update Instances in Library Update
 
 ## Benchmark Construction
 1. Refer to the `Benchmark Construction` section in the [INSTALL.md](./INSTALL.md) to setup environment for this step.

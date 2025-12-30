@@ -56,12 +56,14 @@ def single_process(
 def main(configuration_file_type: str, num_workers: int, batch_size: int):
     print(f"{configuration_file_type}: ")
     source_path = os.path.join(
-        "../benchmark", "commits", f"{configuration_file_type}_commits.csv"
+        "../../benchmark",
+        "Phase1",
+        f"{configuration_file_type}_candidate_update_commits.csv",
     )
     save_path = os.path.join(
-        "../benchmark", "deps", f"{configuration_file_type}_dependencies"
+        "../../benchmark", "Phase1", f"{configuration_file_type}_dependencies"
     )
-    os.makedirs(os.path.join("../benchmark", "deps"), exist_ok=True)
+    os.makedirs(os.path.join("../../benchmark", "Phase1"), exist_ok=True)
 
     df = pd.read_csv(source_path, keep_default_na=False, low_memory=False)
     blob_shas = list(set(list(df["new blob"]) + list(df["old blob"])))
@@ -104,9 +106,7 @@ if __name__ == "__main__":
         description="Parse configuration blobs to extract dependencies",
     )
     parser.add_argument("-f", "--target_files", help="a list of filname separated by ,")
-    parser.add_argument(
-        "-n", "--num_workers", type=int, default=1, help="number of threads"
-    )
+    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
     parser.add_argument(
         "-b",
         "--batch_size",
