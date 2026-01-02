@@ -2,11 +2,15 @@ import argparse
 
 import pandas as pd
 
-CONFIG_files = [
+config_files = [
+    "pom.xml",
+    "requirements.txt",
+    "setup.py",
+    "pyproject.toml",
     "setup.cfg",
 ]
 
-for f in CONFIG_files:
+for f in config_files:
     df = pd.read_csv(
         f"../../benchmark/Phase1/{f}_version_bumping_commits.csv"
     ).drop_duplicates()

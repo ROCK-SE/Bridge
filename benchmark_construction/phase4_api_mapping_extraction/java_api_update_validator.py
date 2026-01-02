@@ -12,9 +12,13 @@ from urllib.request import urlretrieve
 import pandas as pd
 import tree_sitter_java as tsjava
 import tree_sitter_scala as tsscala
-from build_import_mappings import construct_file_tree
+from benchmark_construction.phase3_update_instance_identification.build_import_mappings import (
+    construct_file_tree,
+)
 from joblib import Parallel, delayed
-from parse_api_calls import parse_imports_java
+from benchmark_construction.phase2_api_call_analysis.parse_api_calls import (
+    parse_imports_java,
+)
 from pymongo import MongoClient
 from tqdm.auto import tqdm
 from tree_sitter import Language, Node, Parser

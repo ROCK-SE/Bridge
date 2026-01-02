@@ -5,7 +5,10 @@ from argparse import ArgumentParser
 import pandas as pd
 import tree_sitter_java as tsjava
 from joblib import Parallel, delayed
-from parse_api_calls import parse_api_calls_java, read_raw_blob
+from benchmark_construction.phase2_api_call_analysis.parse_api_calls import (
+    parse_api_calls_java,
+    read_raw_blob,
+)
 from pymongo import MongoClient
 from tqdm import tqdm
 from tree_sitter import Language, Node, Parser
