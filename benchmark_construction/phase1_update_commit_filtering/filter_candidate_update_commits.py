@@ -8,7 +8,7 @@ from joblib import Parallel, delayed
 c2fbb_base_path = "/{server}_data/basemaps/gz/c2fbbFull.{ver}."
 
 
-def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> None:
+def commits_by_filenames(i: int, target_files: list[str], save_path: str) -> None:
     """Query commits that modify filenames in `target_files`
 
     Parameters
@@ -17,8 +17,8 @@ def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> N
         the index of mapping to query, valid range [0, 127]
     target_files : list[str]
         a list of file names to query
-    save_folder : str
-        the folder to save query results for each target file
+    save_path : str
+        the path to save query results for each target file
     """
     results = {f: [] for f in target_files}
     c2fbb_path = c2fbb_base_path + f"{i}.s"
@@ -46,16 +46,12 @@ def commits_by_filenames(i: int, target_files: list[str], save_folder: str) -> N
     print(
         f"{c2fbb_path}: {total} commits modified {', '.join(target_files)} files, {err_line} error line(s)"
     )
-    os.makedirs(os.path.join(save_folder, "Phase1"), exist_ok=True)
     for fn, data in results.items():
-        save_path = os.path.join(
-            save_folder, "Phase1", f"{fn}_candidate_update_commits.csv.{i}"
-        )
         df = pd.DataFrame(
             data,
             columns=["commit", "filepath", "new blob", "old blob"],
         )
-        df.to_csv(save_path, index=False)
+        df.to_csv(f"{save_path}.{i}", index=False)
 
 
 def is_valid_sha1(sha: str):
@@ -86,16 +82,14 @@ def main(
     update : bool, optional
         whether to perform update, by default False
     """
-    save_folder = "../../benchmark"
+    save_folder = "../../benchmark/Phase1"
     remaining_target_files = []
     # When `update` is set to False, we only process filenames whose result file does not exist
     # Else, we process all filenames
-    os.makedirs(os.path.join(save_folder, "Phase1"), exist_ok=True)
+    os.makedirs(save_folder, exist_ok=True)
+    save_path = os.path.join(save_folder, f"{fn}_candidate_update_commits.csv")
     if not update:
         for fn in target_files:
-            save_path = os.path.join(
-                save_folder, "Phase1", f"{fn}_candidate_update_commits.csv"
-            )
             if os.path.exists(save_path):
                 continue
             remaining_target_files.append(fn)
@@ -103,14 +97,11 @@ def main(
         remaining_target_files = target_files[:]
 
     Parallel(n_jobs=num_workers)(
-        delayed(commits_by_filenames)(i, remaining_target_files, save_folder)
+        delayed(commits_by_filenames)(i, remaining_target_files, save_path)
         for i in range(128)
     )
 
     for fn in remaining_target_files:
-        save_path = os.path.join(
-            save_folder, "Phase1", f"{fn}_candidate_update_commits.csv"
-        )
         data = []
         for i in range(128):
             df = pd.read_csv(f"{save_path}.{i}")
@@ -161,4 +152,4 @@ if __name__ == "__main__":
     if args.target_files:
         target_files = args.target_files.split(",")
         print(target_files)
-        main(target_files, args.num_workers, args.update)
+        main(target_files, args.n_jobs, args.update)

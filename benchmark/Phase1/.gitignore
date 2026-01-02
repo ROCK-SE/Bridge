@@ -1,7 +1,3 @@
 # data files
-*.csv
-*.json
-*.missing
-*.blobs
-*patch
-*tar
+*
+!README.md

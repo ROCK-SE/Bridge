@@ -86,7 +86,7 @@ def list_pypi_packages(retry: int = 5) -> list[str] | None:
             packages = [canonicalize_name(proj["name"]) for proj in projects]
             packages = list(set(packages))
             print(f"{len(packages)} PyPI packages")
-            with open("../benchmark/updates/all_pypi_packages.csv", "w") as outf:
+            with open("../../benchmark/Phase1/all_pypi_packages.csv", "w") as outf:
                 for pkg in packages:
                     outf.write(f"{pkg}\n")
             return packages
@@ -212,18 +212,3 @@ def gen_jar_url_path(name: str, version: str):
 def polite_download(url, save_path: str):
     download(url, save_path)
     time.sleep(random.random() * 3)
-
-
-def insert_many_skip_large(col: Collection, documents: list[dict]):
-    error_docs = []
-    try:
-        col.insert_many(documents, ordered=False)
-    except Exception as e:
-        for doc in documents:
-            try:
-                col.insert_one(doc)
-            except pymongo.errors.DuplicateKeyError as e:
-                pass
-            except Exception as e:
-                error_docs.append(doc)
-    return error_docs

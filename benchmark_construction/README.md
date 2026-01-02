@@ -2,14 +2,6 @@
 
 Before you proceed, you should first setup the environment for this step by following the instructions in the [INSTALL.md](../INSTALL.md).
 
-
-## Update Behavior Commits Extraction
-First run `nearby_commits.sh` to get the previous and after 2 commits of the dependency update commits. It produces the `c.pc.ppc.cc.ccc` file in the `../benchmark/updates` folder, where the five columns corresponds to the dependency update commit, parent commits, parent commit's parent commit, child commit, child commit's child commit, respectively. Note that the `c` column includes all commits that modify the 5 kinds of dependency specification files.
-
-Then run `extract_blob.sh` to filter out the above commits that modify java files (with `.java` extension) or python files (with `.py` extension) and to extract blob shas before and after the commit. It produces `c2fbb` file in the `../benchmark/updates` folder consisting of 4 fields: `commit sha,filepath,new blob sha,old blob sha`. It also produces `javablob.idx` and `pyblob.idx` files that stores each Java or Python blob's offset and length in corresponding `blob_{0..127}.bin` files. These ".idx" files are for efficient blob content retrieval from very large ".bin" files.
-
-Please refer to [README.md in the `../benchmark/updates` folder](../benchmark/updates/README.md) for the statistics of these files.
-
 ## Build Import Mappings
 `query_package_versions.py` obtains all versions released before 2024-06-01 for each updated Java/Python packages. The Java package release information is obtained via the [deps.dev API](https://docs.deps.dev/api/v3/), while the Python package release information is obtained via [PyPI Index API](https://docs.pypi.org/api/index-api/#json_1). It has the following command line options:
 ```
