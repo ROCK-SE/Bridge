@@ -6,7 +6,7 @@ This phase identifies update commits from World of Code. The data files obtained
 ```
 usage: python filter_candidate_update_commits.py [-h] [-f TARGET_FILES] [-s SERVER] [-v VER] [-n N_JOBS] [-u]
 
-Query commits that modify specific files
+Filter commits that modify dependency configuration files
 
 options:
   -h, --help            show this help message and exit
@@ -24,7 +24,12 @@ Run the following command to query all commits that modify dependency configurat
 ```shell
 python filter_candidate_update_commits.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -s <default da7> -v <default V3> -n <Number of processes, default 1>
 ```
-In our experiments, we set `n` as 8. It took about 12 hours to finish. The results are stored as `<target file>_candidate_update_commits.csv` files. The csv file contains the following fields: `commit sha,filepath,new blob sha,old blob sha,project`.
+In our experiments, we set `n` as 8. It took about 12 hours to finish. The results are stored as `<target file>_candidate_update_commits.csv` files. The csv file contains the following fields: `commit`, `filepath`, `new_blob`, `old_blob`, `project`.
+
+Then run the following command to dump the candidate update commits to `java/py_candidate_update_commits` collections in the `bridge` MongoDB database:
+```shell
+python dump_data -c
+```
 
 ## Parsing Dependencies
 `parse_dependencies.py` parses dependencies declared in the collected dependency configuration files. It takes as input the csv files obtained in the previous step, gets all unique blob shas (including both `new blob` and `old blob`), and parse dependencies in each blob using the parser (`parse_pom.py`, `parse_pyproject.py`, `parse_requirements.py`, `parse_setup_cfg.py`, `parse_setup_py.py`) corresponding to its configuration file.
@@ -74,12 +79,18 @@ Run the following command to parse all dependency configuration files collected 
 ```shell
 python identify_version_bumping_commits.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -o -n <Number of processes, default 1>
 ```
-In our experiment, we set `n` as 50. It tooks about 10 minutes to finish. The results are stored as `<target file>_version_bumping_commits.csv` files. The csv file has the following fields: `commit,filepath,new blob,old blob,package name,version in the old blob,version in the new blob`.
-We also provide a `-o` option to identify commits that involve non-fixed version constraints changes. The results are stored as `<target file>_version_changing_commits.csv`
+In our experiment, we set `n` as 50. It tooks about 10 minutes to finish. The results are stored as `<target file>_version_bumping_commits.csv` files. The csv file has the following fields: `commit`, `filepath`, `new_blob`, `old_blob`, `package`, `version_before`, `version_after`.
+We also provide a `-o` option to identify commits that involve nonfixed version constraint changes. The results are stored as `<target file>_nonfixed_version_bumping_commits.csv`
 
-After obtaining the `<target file>_version_bumping_commits.csv` files, run the `dep_update_statistics.ipynb` Jupyter Notebook. It produces basic statistics displayed in the `../benchmark/README.md`. It also merge all `<target file>_version_bumping_commits.csv` files to the `../benchmark/updates/c2fpkgvvtype.csv` file.
+Then run the following command to dump the version bumping commits and nonfixed version bumping commits to `java/py_version_bumping_commits` and `java/py_nonfixed_version_bumping_commits` collections in the `bridge` MongoDB database:
+```shell
+python dump_data -b -n
+```
 
 ## Identify Update Commits
-First run `identify_update_commits.sh` to identify update commits for each configuration file. The results are stored as `<target file>_update_commits` files. Each file has the following fields: `commit sha;filepath;new blob sha;old blob sha`.
+First run `identify_update_commits.sh` to identify update commits for each configuration file. The results are stored as `<target file>_update_commits.csv` files. Each file has the following fields: `commit`, `filepath`, `new_blob`, `old_blob`.
 
-Then run `extract_blob.sh` to filter out the above commits that modify java files (with `.java` extension) or python files (with `.py` extension) and to extract blob shas before and after the commit. It produces `c2fbb` file in the `../benchmark/updates` folder consisting of 4 fields: `commit sha,filepath,new blob sha,old blob sha`. It also produces `javablob.idx` and `pyblob.idx` files that stores each Java or Python blob's offset and length in corresponding `blob_{0..127}.bin` files. These ".idx" files are for efficient blob content retrieval from very large ".bin" files.
+Then run the following command to dump update commits to `java/py_update_commits` collections in the `bridge` MongoDB database:
+```shell
+python dump_data -u
+```

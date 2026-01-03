@@ -38,7 +38,9 @@ def commits_by_filenames(i: int, target_files: list[str], save_path: str) -> Non
                 filename = os.path.basename(filepath)
                 if filename not in target_files:
                     continue
-                results[filename].append((commit, filepath, new_blob, old_blob))
+                results[filename].append(
+                    (commit, filepath.strip("/"), new_blob, old_blob)
+                )
             except:
                 err_line += 1
 
@@ -49,7 +51,7 @@ def commits_by_filenames(i: int, target_files: list[str], save_path: str) -> Non
     for fn, data in results.items():
         df = pd.DataFrame(
             data,
-            columns=["commit", "filepath", "new blob", "old blob"],
+            columns=["commit", "filepath", "new_blob", "old_blob"],
         )
         df.to_csv(f"{save_path}.{i}", index=False)
 
@@ -61,7 +63,7 @@ def is_valid_sha1(sha: str):
 
 
 def valid_sha_value(row):
-    if is_valid_sha1(row["new blob"]) and is_valid_sha1(row["old blob"]):
+    if is_valid_sha1(row["new_blob"]) and is_valid_sha1(row["old_blob"]):
         return True
     return False
 
@@ -117,8 +119,8 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="python filter_commits.py",
-        description="Query commits that modify specific files",
+        prog="python filter_candidate_update_commits.py",
+        description="Filter commits that modify dependency configuration files",
     )
     parser.add_argument(
         "-f",

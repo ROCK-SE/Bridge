@@ -19,11 +19,11 @@ for f in setup.cfg pyproject.toml setup.py requirements.txt; do
     rm ${f}_commits.{0..127}
     # remove reocrds that have changed setup.py or file in site-packages folder
     # and remove leading or trailing slashes
-    awk -F';' '$2 !~ /\/?setup\.py|site-packages\//' ${f}_update_commits | awk -F';' 'BEGIN{OFS=";"} {gsub(/^\/+|\/+$/, "", $2); print}' > ${f}_update_commits.temp
-    mv ${f}_update_commits.temp ${f}_update_commits
+    echo "commit,filepath,new_blob,old_blob" > ${f}_update_commits.csv
+    awk -F';' '$2 !~ /\/?setup\.py|site-packages\//' ${f}_update_commits | awk -F';' 'BEGIN{OFS=","} {gsub(/^\/+|\/+$/, "", $2); print}' | awk -F',' 'NF == 4' >> ${f}_update_commits.csv
+    rm ${f}_update_commits
 done
 
-cat requirements.txt_update_commits setup.py_update_commits pyproject.toml_update_commits setup.cfg_update_commits | awk -F';' '{print $3; print $4}' | sort -u > pyblobs
 
 for s in {0..15}; do
     for j in {0..7}; do
@@ -36,6 +36,6 @@ wait
 cat pom.xml_update_commits.{0..127} | sort -t\; -k1 >pom.xml_update_commits
 rm pom.xml_update_commits..{0..127}
 rm pom.xml_commits.{0..127}
-awk -F';' 'BEGIN{OFS=";"} {gsub(/^\/+|\/+$/, "", $2); print}' pom.xml_update_commits > pom.xml_update_commits.temp
-mv pom.xml_update_commits.temp pom.xml_update_commits
-cat pom.xml_update_commits | awk -F';' '{print $3; print $4}' | sort -u > javablobs
+echo "commit,filepath,new_blob,old_blob" > pom.xml_update_commits.csv
+awk -F';' 'BEGIN{OFS=","} {gsub(/^\/+|\/+$/, "", $2); print}' pom.xml_update_commits | awk -F',' 'NF == 4' >> pom.xml_update_commits.csv
+rm pom.xml_update_commits

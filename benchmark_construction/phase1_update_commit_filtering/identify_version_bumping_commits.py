@@ -35,7 +35,7 @@ else:
 
 def get_updates_py(row):
     update_pairs = ""
-    new_deps, old_deps = row["new deps"], row["old deps"]
+    new_deps, old_deps = row["new_deps"], row["old_deps"]
     for pkg, new_spec in new_deps.items():
         if not new_spec.startswith("=="):
             continue
@@ -59,7 +59,7 @@ def get_updates_py(row):
 
 def get_updates_java(row):
     update_pairs = ""
-    new_deps, old_deps = row["new deps"], row["old deps"]
+    new_deps, old_deps = row["new_deps"], row["old_deps"]
     for pkg, new_spec in new_deps.items():
         # https://maven.apache.org/pom.html#Dependency_Version_Requirement_Specification
         if ("," in new_spec) or ("(" in new_spec) or (")" in new_spec):
@@ -97,23 +97,23 @@ def filter(file_type: str):
     dependencies = json.load(open(dependency_path))
     print(f"{len(dependencies)} unique {file_type} blobs")
 
-    commits_info["new deps"] = commits_info["new blob"].map(dependencies)
-    commits_info["old deps"] = commits_info["old blob"].map(dependencies)
+    commits_info["new_deps"] = commits_info["new_blob"].map(dependencies)
+    commits_info["old_deps"] = commits_info["old_blob"].map(dependencies)
 
-    commits_info["update pairs"] = commits_info.parallel_apply(get_updates, axis=1)
+    commits_info["update_pairs"] = commits_info.parallel_apply(get_updates, axis=1)
 
     # Commits that update dependency versions
-    updates = commits_info[commits_info["update pairs"] != ""]
+    updates = commits_info[commits_info["update_pairs"] != ""]
     num_update_commit = len(updates)
 
     # Make each update to individual row
-    updates.loc[:, "update pairs"] = updates["update pairs"].str.split(";")
-    updates = updates.explode("update pairs")
+    updates.loc[:, "update_pairs"] = updates["update_pairs"].str.split(";")
+    updates = updates.explode("update_pairs")
     num_update_deps = len(updates)
 
     # Split package, version after, and version before in each update to individual column
-    updates[["package", "version after", "version before"]] = updates[
-        "update pairs"
+    updates[["package", "version_after", "version_before"]] = updates[
+        "update_pairs"
     ].str.split(",", expand=True)
     num_unique_pkgs1 = updates["package"].nunique()
 
@@ -136,18 +136,18 @@ def filter(file_type: str):
         [
             "commit",
             "filepath",
-            "new blob",
-            "old blob",
+            "new_blob",
+            "old_blob",
             "package",
-            "version before",
-            "version after",
+            "version_before",
+            "version_after",
         ]
     ].to_csv(save_path, index=False)
 
 
 def get_updates_py2(row):
     update_pairs = ""
-    new_deps, old_deps = row["new deps"], row["old deps"]
+    new_deps, old_deps = row["new_deps"], row["old_deps"]
     for pkg, new_spec in new_deps.items():
         if new_spec and (set(new_spec) - set("0123456789.><=!~, ")):
             continue
@@ -165,7 +165,7 @@ def get_updates_py2(row):
 
 def get_updates_java2(row):
     update_pairs = ""
-    new_deps, old_deps = row["new deps"], row["old deps"]
+    new_deps, old_deps = row["new_deps"], row["old_deps"]
     for pkg, new_spec in new_deps.items():
         if "@" in pkg:
             continue
@@ -198,23 +198,23 @@ def filter2(file_type: str):
     dependencies = json.load(open(dependency_path))
     print(f"{len(dependencies)} unique {file_type} blobs")
 
-    commits_info["new deps"] = commits_info["new blob"].map(dependencies)
-    commits_info["old deps"] = commits_info["old blob"].map(dependencies)
+    commits_info["new_deps"] = commits_info["new_blob"].map(dependencies)
+    commits_info["old_deps"] = commits_info["old_blob"].map(dependencies)
 
-    commits_info["update pairs"] = commits_info.parallel_apply(get_updates, axis=1)
+    commits_info["update_pairs"] = commits_info.parallel_apply(get_updates, axis=1)
 
     # Commits that update dependency versions
-    updates = commits_info[commits_info["update pairs"] != ""]
+    updates = commits_info[commits_info["update_pairs"] != ""]
     num_update_commit = len(updates)
 
     # Make each update to individual row
-    updates.loc[:, "update pairs"] = updates["update pairs"].str.split(";")
-    updates = updates.explode("update pairs")
+    updates.loc[:, "update_pairs"] = updates["update_pairs"].str.split(";")
+    updates = updates.explode("update_pairs")
     num_update_deps = len(updates)
 
     # Split package, version after, and version before in each update to individual column
-    updates[["package", "version after", "version before"]] = updates[
-        "update pairs"
+    updates[["package", "version_after", "version_before"]] = updates[
+        "update_pairs"
     ].str.split("@", expand=True)
     num_unique_pkgs1 = updates["package"].nunique()
 
@@ -232,16 +232,18 @@ def filter2(file_type: str):
         f"Save {updates['commit'].nunique()} commits, {len(updates)} update, {num_unique_pkgs2} packages"
     )
 
-    save_path = os.path.join(prefix, f"{file_type}_version_changing_commits.csv")
+    save_path = os.path.join(
+        prefix, f"{file_type}_nonfixed_version_bumping_commits.csv"
+    )
     updates[
         [
             "commit",
             "filepath",
-            "new blob",
-            "old blob",
+            "new_blob",
+            "old_blob",
             "package",
-            "version before",
-            "version after",
+            "version_before",
+            "version_after",
         ]
     ].to_csv(save_path, index=False)
 
