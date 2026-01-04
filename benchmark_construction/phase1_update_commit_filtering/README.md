@@ -26,11 +26,6 @@ python filter_candidate_update_commits.py -f pom.xml,requirements.txt,setup.cfg,
 ```
 In our experiments, we set `n` as 8. It took about 12 hours to finish. The results are stored as `<target file>_candidate_update_commits.csv` files. The csv file contains the following fields: `commit`, `filepath`, `new_blob`, `old_blob`, `project`.
 
-Then run the following command to dump the candidate update commits to `java/py_candidate_update_commits` collections in the `bridge` MongoDB database:
-```shell
-python dump_data -c
-```
-
 ## Parsing Dependencies
 `parse_dependencies.py` parses dependencies declared in the collected dependency configuration files. It takes as input the csv files obtained in the previous step, gets all unique blob shas (including both `new blob` and `old blob`), and parse dependencies in each blob using the parser (`parse_pom.py`, `parse_pyproject.py`, `parse_requirements.py`, `parse_setup_cfg.py`, `parse_setup_py.py`) corresponding to its configuration file.
 
@@ -82,15 +77,30 @@ python identify_version_bumping_commits.py -f pom.xml,requirements.txt,setup.cfg
 In our experiment, we set `n` as 50. It tooks about 10 minutes to finish. The results are stored as `<target file>_version_bumping_commits.csv` files. The csv file has the following fields: `commit`, `filepath`, `new_blob`, `old_blob`, `package`, `version_before`, `version_after`.
 We also provide a `-o` option to identify commits that involve nonfixed version constraint changes. The results are stored as `<target file>_nonfixed_version_bumping_commits.csv`
 
-Then run the following command to dump the version bumping commits and nonfixed version bumping commits to `java/py_version_bumping_commits` and `java/py_nonfixed_version_bumping_commits` collections in the `bridge` MongoDB database:
-```shell
-python dump_data -b -n
-```
-
 ## Identify Update Commits
-First run `identify_update_commits.sh` to identify update commits for each configuration file. The results are stored as `<target file>_update_commits.csv` files. Each file has the following fields: `commit`, `filepath`, `new_blob`, `old_blob`.
+Run `identify_update_commits.sh` to identify update commits for each configuration file. The results are stored as `<target file>_update_commits.csv` files. Each file has the following fields: `commit`, `filepath`, `new_blob`, `old_blob`.
 
-Then run the following command to dump update commits to `java/py_update_commits` collections in the `bridge` MongoDB database:
-```shell
-python dump_data -u
+## Dump data to MongoDB
+`dump_date.py` dump the candidate update commits, version bumping commits, and update commits to MongoDB.
+
+It has the following command line options:
 ```
+usage: python dump_data.py [-h] [-c] [-b] [-n] [-u]
+
+Dump data files to the `bridge` MongoDB database
+
+options:
+  -h, --help       show this help message and exit
+  -c, --candidate  dump candidate update commits to java/py_candidate_update_commits collection
+  -b, --bumping    dump version bumping commits to java/py_version_bumping_commits collection
+  -n, --nonfixed   dump nonfixed version bumping commits to java/py_nonfixed_version_bumping_commits collection
+  -u, --update     dump update commits to java/py_update_commits collection
+```
+
+Run the following command:
+```shell
+python dump_data -c -b -u
+```
+
+## Get Data Statistics of This Phase
+Run `phase1_analysis.ipynb` in the root folder to obtain Table 2 in the paper.
