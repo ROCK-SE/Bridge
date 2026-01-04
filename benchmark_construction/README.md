@@ -69,30 +69,6 @@ python dump_data.py -d -b
 Please refer to [README.md in the `../benchmark/db` folder](../db/README.md) for the statistics of these collections.
 
 
-## Parse API Calls
-`parse_api_calls.py` parses API calls in Java/Python code files and store them to MongoDB collections. For Java, we deal with object type resolution and access chain identification. For Python, we deal with alias resolution and access chain identification. It has the following command line options:
-```
-usage: python parse_api_calls.py [-h] [-n N_JOBS] [-b BATCH_SIZE] [--python] [--java]
-
-Parse api calls in Java/Python files and store them in MongoDB collections
-
-options:
-  -h, --help            show this help message and exit
-  -n N_JOBS, --n_jobs N_JOBS
-                        number of workers
-  -b BATCH_SIZE, --batch_size BATCH_SIZE
-                        number of blobs to processed in a batch
-  --python              Parse Python files
-  --java                Parse Java files
-```
-Run the following command to parse API calls for all Java/Python blobs obtained in above steps.
-```shell
-python parse_api_calls.py --java --python -n <Number of processes, default 1> -b <Number of blobs in a batch, default 1>
-```
-In our experiments, we set `n` and `b` as 512, 6000 and 512, 2000 for Java and Python, respectively. It took about 16 hours and 6 hours to finish. The results are stored to `java_api_calls`  and `py_api_calls` collections in the `api_update` database for Java and Python, respectively.
-
-Please refer to [README.md in the `../benchmark/db` folder](../db/README.md) for the statistics of these collections.
-
 ## Mine API Update Mappings
 `mine_api_updates.py` mines Java/Python API update mappings from the API call changes between old and new blobs. It has the following command line options:
 ```

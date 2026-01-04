@@ -95,6 +95,7 @@ def merge_update_commits(lang: str):
     insert_many_skip_large(tmp_col, data)
 
     update_col.drop()
+    tmp_col.create_index("commit")
     tmp_col.rename(f"{lang}_update_commits")
 
 
