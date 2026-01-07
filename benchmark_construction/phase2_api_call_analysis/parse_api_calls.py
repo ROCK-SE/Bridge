@@ -13,7 +13,7 @@ from joblib import Parallel, delayed
 from pymongo import MongoClient
 from tqdm.auto import tqdm, trange
 from tree_sitter import Language, Node, Parser, Tree
-from utils import insert_many_skip_large, java_package_list
+from utils import insert_many_skip_large, java_library_list
 from woc.local import decomp_or_raw
 
 client = MongoClient("127.0.0.1", 27017)
@@ -28,12 +28,12 @@ JAVA_LANGUAGE = Language(tsjava.language())
 java_parser = Parser(JAVA_LANGUAGE)
 
 
-if not os.path.exists("java_standard_packages.json"):
-    java_package_list()
+if not os.path.exists("java_standard_libraries.json"):
+    java_library_list()
 JAVA_STDLIB = list(
     set(
         itertools.chain.from_iterable(
-            json.load(open("java_standard_packages.json")).values()
+            json.load(open("java_standard_libraries.json")).values()
         )
     )
 )

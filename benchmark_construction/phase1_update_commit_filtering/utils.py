@@ -43,7 +43,7 @@ def parse_reqs(reqs: list[str]) -> dict[str, str]:
             continue
         try:
             req = Requirement(req)
-            # The existence of url suggests that this package is not from PyPI,
+            # The existence of url suggests that this library is not from PyPI,
             # therefore we skip it.
             if req.url is not None:
                 continue
@@ -63,8 +63,8 @@ def read_blob(sha: str) -> str | None:
         return None
 
 
-def list_pypi_packages(retry: int = 5) -> list[str] | None:
-    """List all PyPI packages with PyPI Simple API
+def list_pypi_libraries(retry: int = 5) -> list[str] | None:
+    """List all PyPI libraries with PyPI Simple API
 
     Parameters
     ----------
@@ -74,22 +74,22 @@ def list_pypi_packages(retry: int = 5) -> list[str] | None:
     Returns
     -------
     list[str] | None
-        A list of canonicalize PyPI package names
+        A list of canonicalize PyPI library names
     """
 
     while retry > 0:
-        packages = []
+        packalibrariesges = []
         r = requests.get(SIMPLE_API_ENDPOINT, headers=HEADERS, timeout=5)
         if r.status_code == requests.codes.ok:
             logger.debug("Request Simple API successfully")
             projects = r.json()["projects"]
-            packages = [canonicalize_name(proj["name"]) for proj in projects]
-            packages = list(set(packages))
-            print(f"{len(packages)} PyPI packages")
-            with open("../../benchmark/Phase1/all_pypi_packages.csv", "w") as outf:
-                for pkg in packages:
+            libraries = [canonicalize_name(proj["name"]) for proj in projects]
+            libraries = list(set(libraries))
+            print(f"{len(libraries)} PyPI libraries")
+            with open("../../benchmark/Phase1/all_pypi_libraries.csv", "w") as outf:
+                for pkg in libraries:
                     outf.write(f"{pkg}\n")
-            return packages
+            return libraries
 
         retry -= 1
         logger.error(

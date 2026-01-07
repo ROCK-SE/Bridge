@@ -4,7 +4,7 @@ import os
 
 import pandas as pd
 from pandarallel import pandarallel
-from utils import is_strict_ver, list_pypi_packages
+from utils import is_strict_ver, list_pypi_libraries
 
 CONFIG_TYPES = [
     "setup.cfg",
@@ -14,21 +14,21 @@ CONFIG_TYPES = [
     "pom.xml",
 ]
 
-if os.path.exists("../../benchmark/Phase1/all_pypi_packages.csv"):
-    PYPI_PACKAGES = (
-        open("../../benchmark/Phase1/all_pypi_packages.csv").read().splitlines()
+if os.path.exists("../../benchmark/Phase1/all_pypi_libraries.csv"):
+    PYPI_LIBRARIES = (
+        open("../../benchmark/Phase1/all_pypi_libraries.csv").read().splitlines()
     )
 else:
-    PYPI_PACKAGES = list_pypi_packages()
+    PYPI_LIBRARIES = list_pypi_libraries()
 
-if os.path.exists("../../benchmark/Phase1/all_maven_packages.csv"):
-    MAVEN_PACKAGES = (
-        open("../../benchmark/Phase1/all_maven_packages.csv").read().splitlines()
+if os.path.exists("../../benchmark/Phase1/all_maven_libraries.csv"):
+    MAVEN_LIBRARIES = (
+        open("../../benchmark/Phase1/all_maven_libraries.csv").read().splitlines()
     )
 else:
     raise Exception(
-        "all_maven_packages.csv does not exists. Please obtain it from deps.dev BigQuery dataset: https://docs.deps.dev/bigquery/v1/.\n"
-        "Use the following SQL query and save the results to all_maven_packages.csv:\n"
+        "all_maven_libraries.csv does not exists. Please obtain it from deps.dev BigQuery dataset: https://docs.deps.dev/bigquery/v1/.\n"
+        "Use the following SQL query and save the results to all_maven_libraries.csv:\n"
         'SELECT DISTINCT Name FROM `bigquery-public-data.deps_dev_v1.PackageVersions` WHERE System = "MAVEN"',
     )
 
@@ -84,10 +84,10 @@ def get_updates_java(row):
 
 def filter(file_type: str):
     get_updates = get_updates_py
-    ALL_PACKAGES = PYPI_PACKAGES
+    ALL_LIBRARIES = PYPI_LIBRARIES
     if file_type == "pom.xml":
         get_updates = get_updates_java
-        ALL_PACKAGES = MAVEN_PACKAGES
+        ALL_LIBRARIES = MAVEN_LIBRARIES
     prefix = "../../benchmark/Phase1"
     commits_path = os.path.join(prefix, f"{file_type}_candidate_update_commits.csv")
     dependency_path = os.path.join(prefix, f"{file_type}_dependencies.json")
@@ -111,24 +111,24 @@ def filter(file_type: str):
     updates = updates.explode("update_pairs")
     num_update_deps = len(updates)
 
-    # Split package, version after, and version before in each update to individual column
-    updates[["package", "version_after", "version_before"]] = updates[
+    # Split library, version after, and version before in each update to individual column
+    updates[["library", "version_after", "version_before"]] = updates[
         "update_pairs"
     ].str.split(",", expand=True)
-    num_unique_pkgs1 = updates["package"].nunique()
+    num_unique_pkgs1 = updates["library"].nunique()
 
-    # Ensure packages exist on PyPI or Maven Central
-    updates = updates[updates["package"].isin(ALL_PACKAGES)]
-    num_unique_pkgs2 = updates["package"].nunique()
+    # Ensure libraries exist on PyPI or Maven Central
+    updates = updates[updates["library"].isin(ALL_LIBRARIES)]
+    num_unique_pkgs2 = updates["library"].nunique()
 
     print(
-        f"\n{num_update_commit} commits perform {num_update_deps} dependency version updates in {file_type}, involve {num_unique_pkgs1} packages"
+        f"\n{num_update_commit} commits perform {num_update_deps} dependency version updates in {file_type}, involve {num_unique_pkgs1} libraries"
     )
     print(
-        f"{num_update_deps - len(updates)} updates involving {num_unique_pkgs1 - num_unique_pkgs2} packages that do not exist on PyPI or Maven Central",
+        f"{num_update_deps - len(updates)} updates involving {num_unique_pkgs1 - num_unique_pkgs2} libraries that do not exist on PyPI or Maven Central",
     )
     print(
-        f"Save {updates['commit'].nunique()} commits, {len(updates)} update, {num_unique_pkgs2} packages"
+        f"Save {updates['commit'].nunique()} commits, {len(updates)} update, {num_unique_pkgs2} libraries"
     )
 
     save_path = os.path.join(prefix, f"{file_type}_version_bumping_commits.csv")
@@ -138,7 +138,7 @@ def filter(file_type: str):
             "filepath",
             "new_blob",
             "old_blob",
-            "package",
+            "library",
             "version_before",
             "version_after",
         ]
@@ -185,10 +185,10 @@ def get_updates_java2(row):
 
 def filter2(file_type: str):
     get_updates = get_updates_py2
-    ALL_PACKAGES = PYPI_PACKAGES
+    ALL_LIBRARIES = PYPI_LIBRARIES
     if file_type == "pom.xml":
         get_updates = get_updates_java2
-        ALL_PACKAGES = MAVEN_PACKAGES
+        ALL_LIBRARIES = MAVEN_LIBRARIES
     prefix = "../../benchmark/Phase1"
     commits_path = os.path.join(prefix, f"{file_type}_candidate_update_commits.csv")
     dependency_path = os.path.join(prefix, f"{file_type}_dependencies.json")
@@ -212,24 +212,24 @@ def filter2(file_type: str):
     updates = updates.explode("update_pairs")
     num_update_deps = len(updates)
 
-    # Split package, version after, and version before in each update to individual column
-    updates[["package", "version_after", "version_before"]] = updates[
+    # Split library, version after, and version before in each update to individual column
+    updates[["library", "version_after", "version_before"]] = updates[
         "update_pairs"
     ].str.split("@", expand=True)
-    num_unique_pkgs1 = updates["package"].nunique()
+    num_unique_pkgs1 = updates["library"].nunique()
 
-    # Ensure packages exist on PyPI or Maven Central
-    updates = updates[updates["package"].isin(ALL_PACKAGES)]
-    num_unique_pkgs2 = updates["package"].nunique()
+    # Ensure libraries exist on PyPI or Maven Central
+    updates = updates[updates["library"].isin(ALL_LIBRARIES)]
+    num_unique_pkgs2 = updates["library"].nunique()
 
     print(
-        f"\n{num_update_commit} commits perform {num_update_deps} dependency version updates in {file_type}, involve {num_unique_pkgs1} packages"
+        f"\n{num_update_commit} commits perform {num_update_deps} dependency version updates in {file_type}, involve {num_unique_pkgs1} libraries"
     )
     print(
-        f"{num_update_deps - len(updates)} updates involving {num_unique_pkgs1 - num_unique_pkgs2} packages that do not exist on PyPI or Maven Central",
+        f"{num_update_deps - len(updates)} updates involving {num_unique_pkgs1 - num_unique_pkgs2} libraries that do not exist on PyPI or Maven Central",
     )
     print(
-        f"Save {updates['commit'].nunique()} commits, {len(updates)} update, {num_unique_pkgs2} packages"
+        f"Save {updates['commit'].nunique()} commits, {len(updates)} update, {num_unique_pkgs2} libraries"
     )
 
     save_path = os.path.join(
@@ -241,7 +241,7 @@ def filter2(file_type: str):
             "filepath",
             "new_blob",
             "old_blob",
-            "package",
+            "library",
             "version_before",
             "version_after",
         ]

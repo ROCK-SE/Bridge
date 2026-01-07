@@ -73,7 +73,7 @@ def merge_update_commits(lang: str):
             cfg_file_changes.setdefault(filepath, [])
             cfg_file_changes[filepath].append(
                 {
-                    "package": doc["package"],
+                    "library": doc["library"],
                     "version_before": doc["version_before"],
                     "version_after": doc["version_after"],
                 }

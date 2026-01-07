@@ -104,7 +104,7 @@ def parse_requirements(content: str) -> dict[str, str]:
             if not args:
                 continue
             req = Requirement(args)
-            # The existence of url suggests that this package is not from PyPI,
+            # The existence of url suggests that this library is not from PyPI,
             # therefore we skip it.
             if req.url is not None:
                 continue

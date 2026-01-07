@@ -28,43 +28,43 @@ def get_soup(url: str) -> BeautifulSoup:
 
 def parse_lia_tag(url: str, filter: dict):
     soup = get_soup(url)
-    packages = []
+    libraries = []
     for item in soup.find_all(**filter):
-        packages.append(item.find("a").text)
-    return packages
+        libraries.append(item.find("a").text)
+    return libraries
 
 
 def parse_font_tag(url: str, filter: dict):
     soup = get_soup(url)
-    packages = []
+    libraries = []
     for item in soup.find_all(**filter):
         if item.text != "All Classes":
-            packages.append(item.text)
-    return packages
+            libraries.append(item.text)
+    return libraries
 
 
 def parse_li_tag(url: str, filter: dict):
     soup = get_soup(url)
-    packages = []
+    libraries = []
     ul = soup.find(**filter)
     if ul:
         for li in ul.find_all(name="li"):
-            packages.append(li.text)
-    return packages
+            libraries.append(li.text)
+    return libraries
 
 
 def parse_th_or_div_tag(url: str, filter: dict):
     soup = get_soup(url)
 
-    packages = []
+    libraries = []
     for item in soup.find_all(**filter):
         if item.text == "Package":
             continue
-        packages.append(item.text)
-    return packages
+        libraries.append(item.text)
+    return libraries
 
 
-def javaee_2_6_packages(version: int):
+def javaee_2_6_libraries(version: int):
     assert version in range(2, 7)
 
     if version == 2:
@@ -205,43 +205,43 @@ def list_java_lang():
     return result
 
 
-def java_package_list():
-    java_packages = {}
+def java_library_list():
+    java_libraries = {}
     for version in range(25):
         url = javase_apidocs_url(version)
         filter = javase_soup_filter(version)
         parser = javase_soup_parser(version)
-        java_packages[f"javase_{version}"] = parser(url, filter)
-        print(f"javase_{version}", len(java_packages[f"javase_{version}"]))
+        java_libraries[f"javase_{version}"] = parser(url, filter)
+        print(f"javase_{version}", len(java_libraries[f"javase_{version}"]))
 
     for version in range(2, 9):
         url = javaee_apidocs_url(version)
         filter = javaee_soup_filter(version)
         parser = javaee_soup_parser(version)
-        java_packages[f"javaee_{version}"] = parser(url, filter)
-        print(f"javaee_{version}", len(java_packages[f"javaee_{version}"]))
+        java_libraries[f"javaee_{version}"] = parser(url, filter)
+        print(f"javaee_{version}", len(java_libraries[f"javaee_{version}"]))
 
     for version in [8, 9, 9.1, 10, 11]:
         url = jakarta_apidocs_url(version)
         filter = jakarta_soup_filter(version)
         parser = jakarta_soup_parser(version)
-        java_packages[f"jakarta_{version}"] = parser(url, filter)
-        print(f"jakarta_{version}", len(java_packages[f"jakarta_{version}"]))
+        java_libraries[f"jakarta_{version}"] = parser(url, filter)
+        print(f"jakarta_{version}", len(java_libraries[f"jakarta_{version}"]))
 
     # https://www.oracle.com/java/technologies/javacard-downloads.html#archive
-    java_packages["java_card_2.1"] = [
+    java_libraries["java_card_2.1"] = [
         "java.lang",
         "javacard.framework",
         "javacard.security",
         "javacardx.crypto",
     ]
-    java_packages["java_card_2.1.1"] = [
+    java_libraries["java_card_2.1.1"] = [
         "java.lang",
         "javacard.framework",
         "javacard.security",
         "javacardx.crypto",
     ]
-    java_packages["java_card_2.2"] = [
+    java_libraries["java_card_2.2"] = [
         "java.io",
         "java.lang",
         "java.rmi",
@@ -250,7 +250,7 @@ def java_package_list():
         "javacard.security",
         "javacardx.crypto",
     ]
-    java_packages["java_card_2.2.1"] = [
+    java_libraries["java_card_2.2.1"] = [
         "java.io",
         "java.lang",
         "java.rmi",
@@ -259,23 +259,7 @@ def java_package_list():
         "javacard.security",
         "javacardx.crypto",
     ]
-    java_packages["java_card_2.2.2"] = [
-        "java.io",
-        "java.lang",
-        "java.rmi",
-        "javacard.framework",
-        "javacard.framework.service",
-        "javacard.security",
-        "javacardx.apdu",
-        "javacardx.biometry",
-        "javacardx.crypto",
-        "javacardx.external",
-        "javacardx.framework.math",
-        "javacardx.framework.tlv",
-        "javacardx.framework.util",
-        "javacardx.framework.util.intx",
-    ]
-    java_packages["java_card_3.0.1_classic"] = [
+    java_libraries["java_card_2.2.2"] = [
         "java.io",
         "java.lang",
         "java.rmi",
@@ -291,7 +275,23 @@ def java_package_list():
         "javacardx.framework.util",
         "javacardx.framework.util.intx",
     ]
-    java_packages["java_card_3.0.1_connected"] = [
+    java_libraries["java_card_3.0.1_classic"] = [
+        "java.io",
+        "java.lang",
+        "java.rmi",
+        "javacard.framework",
+        "javacard.framework.service",
+        "javacard.security",
+        "javacardx.apdu",
+        "javacardx.biometry",
+        "javacardx.crypto",
+        "javacardx.external",
+        "javacardx.framework.math",
+        "javacardx.framework.tlv",
+        "javacardx.framework.util",
+        "javacardx.framework.util.intx",
+    ]
+    java_libraries["java_card_3.0.1_connected"] = [
         "java.io",
         "java.lang",
         "java.lang.annotation",
@@ -319,7 +319,7 @@ def java_package_list():
         "javax.servlet",
         "javax.servlet.http",
     ]
-    java_packages["java_card_3.0.4_classic"] = [
+    java_libraries["java_card_3.0.4_classic"] = [
         "java.io",
         "java.lang",
         "java.rmi",
@@ -337,7 +337,7 @@ def java_package_list():
         "javacardx.framework.util",
         "javacardx.framework.util.intx",
     ]
-    java_packages["java_card_3.0.5_classic"] = [
+    java_libraries["java_card_3.0.5_classic"] = [
         "java.io",
         "java.lang",
         "java.rmi",
@@ -358,7 +358,7 @@ def java_package_list():
         "javacardx.framework.util.intx",
         "javacardx.security",
     ]
-    java_packages["java_card_3.1_classic"] = [
+    java_libraries["java_card_3.1_classic"] = [
         "java.io",
         "java.lang",
         "java.rmi",
@@ -385,7 +385,7 @@ def java_package_list():
         "javacardx.security.derivation",
         "javacardx.security.util",
     ]
-    java_packages["java_card_3.2_classic"] = [
+    java_libraries["java_card_3.2_classic"] = [
         "java.io",
         "java.lang",
         "java.rmi",
@@ -413,7 +413,7 @@ def java_package_list():
         "javacardx.security.util",
     ]
     # https://docs.oracle.com/cd/E17802_01/javafx/javafx/1/docs/api/index.html
-    java_packages["javafx_1.0"] = [
+    java_libraries["javafx_1.0"] = [
         "javafx.animation",
         "javafx.animation.transition",
         "javafx.async",
@@ -440,7 +440,7 @@ def java_package_list():
         "javafx.util",
     ]
     # https://docs.oracle.com/javafx/2/api/overview-frame.html
-    java_packages["javafx_2.2"] = [
+    java_libraries["javafx_2.2"] = [
         "javafx.animation",
         "javafx.application",
         "javafx.beans",
@@ -480,10 +480,10 @@ def java_package_list():
         url = javafx_apidocs_urls(version)
         filter = javafx_soup_filter(version)
         parser = javafx_soup_parser(version)
-        java_packages[f"javafx_{version}"] = parser(url, filter)
-        print(f"javafx_{version}", len(java_packages[f"javafx_{version}"]))
+        java_libraries[f"javafx_{version}"] = parser(url, filter)
+        print(f"javafx_{version}", len(java_libraries[f"javafx_{version}"]))
 
-    java_packages["javame_8"] = [
+    java_libraries["javame_8"] = [
         "java.io",
         "java.lang",
         "java.lang.annotation",
@@ -511,7 +511,7 @@ def java_package_list():
         "javax.microedition.swm",
     ]
 
-    java_packages["java.lang"] = list_java_lang()
+    java_libraries["java.lang"] = list_java_lang()
 
-    with open("java_standard_packages.json", "w") as outf:
-        json.dump(java_packages, outf, indent=4)
+    with open("java_standard_libraries.json", "w") as outf:
+        json.dump(java_libraries, outf, indent=4)

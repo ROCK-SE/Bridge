@@ -49,10 +49,10 @@ Run the following command to parse all dependency configuration files collected 
 ```shell
 python parse_dependencies.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -n <Number of processes, default 1> -b <Number of blobs in a batch, default 1>
 ```
-In our experiments, we set `n` and `b` as 128 and 5000. It took about 8 hours to finish. The results are stored as `<target file>_dependencies.json` files. The json files have the same schema: `{blob sha: {package name: version constraints}}`.
+In our experiments, we set `n` and `b` as 128 and 5000. It took about 8 hours to finish. The results are stored as `<target file>_dependencies.json` files. The json files have the same schema: `{blob sha: {library name: version constraints}}`.
 
 ## Identify Version Bumping Commits
-`identify_version_bumping_commits.py` filters out commits that perform dependency version update and filters out packages not on the Maven or PyPI platform.
+`identify_version_bumping_commits.py` filters out commits that perform dependency version update and filters out libraries not on the Maven or PyPI platform.
 
 It has the following command line options:
 ```
@@ -74,7 +74,7 @@ Run the following command to parse all dependency configuration files collected 
 ```shell
 python identify_version_bumping_commits.py -f pom.xml,requirements.txt,setup.cfg,pyproject.toml,setup.py -o -n <Number of processes, default 1>
 ```
-In our experiment, we set `n` as 50. It tooks about 10 minutes to finish. The results are stored as `<target file>_version_bumping_commits.csv` files. The csv file has the following fields: `commit`, `filepath`, `new_blob`, `old_blob`, `package`, `version_before`, `version_after`.
+In our experiment, we set `n` as 50. It tooks about 10 minutes to finish. The results are stored as `<target file>_version_bumping_commits.csv` files. The csv file has the following fields: `commit`, `filepath`, `new_blob`, `old_blob`, `library`, `version_before`, `version_after`.
 We also provide a `-o` option to identify commits that involve nonfixed version constraint changes. The results are stored as `<target file>_nonfixed_version_bumping_commits.csv`
 
 ## Identify Update Commits

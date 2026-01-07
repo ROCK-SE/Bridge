@@ -60,7 +60,7 @@ def parse_setup_cfg(content: str) -> dict[str, str]:
     Returns
     -------
     dict[str, str]
-        a dict with the package name as the key and the package's version constraint as the value
+        a dict with the library name as the key and the library's version constraint as the value
     """
     dependencies = {}
     try:
@@ -83,7 +83,7 @@ def parse_setup_cfg(content: str) -> dict[str, str]:
                     install_requires
                 ).items():
                     # if `name` is already in dependencies, we do not assign constraint.
-                    # That is, we only keep the first version constraint for each package
+                    # That is, we only keep the first version constraint for each library
                     dependencies[name] = dependencies.get(name, constraint)
 
             # extras_require can reside in the [options.extras_require] section
