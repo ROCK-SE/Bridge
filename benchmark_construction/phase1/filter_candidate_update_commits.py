@@ -84,7 +84,7 @@ def main(
     update : bool, optional
         whether to perform update, by default False
     """
-    save_folder = "../../benchmark/Phase1"
+    save_folder = "../../benchmark/phase1"
     remaining_target_files = []
     # When `update` is set to False, we only process filenames whose result file does not exist
     # Else, we process all filenames

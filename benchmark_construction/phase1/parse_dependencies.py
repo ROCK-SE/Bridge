@@ -56,11 +56,11 @@ def single_process(
 def main(configuration_file_type: str, num_workers: int, batch_size: int):
     print(f"{configuration_file_type}: ")
     source_path = os.path.join(
-        "../../benchmark/Phase1",
+        "../../benchmark/phase1",
         f"{configuration_file_type}_candidate_update_commits.csv",
     )
     save_path = os.path.join(
-        "../../benchmark/Phase1", f"{configuration_file_type}_dependencies"
+        "../../benchmark/phase1", f"{configuration_file_type}_dependencies"
     )
 
     df = pd.read_csv(source_path, keep_default_na=False, low_memory=False)

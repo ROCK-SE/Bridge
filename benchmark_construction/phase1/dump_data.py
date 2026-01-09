@@ -25,7 +25,7 @@ def dump(datafix: str):
 
     for f in config_files[1:]:
         with pd.read_csv(
-            f"../../benchmark/Phase1/{f}_{datafix}_commits.csv",
+            f"../../benchmark/phase1/{f}_{datafix}_commits.csv",
             low_memory=False,
             keep_default_na=False,
             chunksize=100000,
@@ -35,7 +35,7 @@ def dump(datafix: str):
     py_col.create_index("commit")
 
     with pd.read_csv(
-        f"../../benchmark/Phase1/{config_files[0]}_{datafix}_commits.csv",
+        f"../../benchmark/phase1/{config_files[0]}_{datafix}_commits.csv",
         low_memory=False,
         keep_default_na=False,
         chunksize=100000,

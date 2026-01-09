@@ -28,7 +28,7 @@ def get_all_blobs(lang: str):
         sections[i].append(b)
 
     for i in range(128):
-        with open(f"../../benchmark/Phase2/{lang}_blob.{i}", "w") as outf:
+        with open(f"../../benchmark/phase2/{lang}_blob.{i}", "w") as outf:
             sections[i].sort()
             for b in sections[i]:
                 outf.write(f"{b}\n")

@@ -48,7 +48,7 @@ def get_unique_library_versions():
         data = pd.DataFrame(data, columns=["library", "version"]).drop_duplicates()
         print(f"{lang}: {data['library'].nunique()} libraries, {len(data)} releases")
         data.to_csv(
-            f"../../benchmark/Phase3/{lang}_library_versions.csv",
+            f"../../benchmark/phase3/{lang}_library_versions.csv",
             header=False,
             index=False,
         )
@@ -132,7 +132,7 @@ def batch_query(system: str, names: list[str], i: int):
             time.sleep(random.randint(2, 10) * 0.01)
 
         save_path = os.path.join(
-            "../../benchmark/Phase3", f"{system}_releases.json.{i}"
+            "../../benchmark/phase3", f"{system}_releases.json.{i}"
         )
         with open(save_path, "w") as outf:
             json.dump(results, outf, indent=2)
@@ -144,7 +144,7 @@ def create_batches(data: list, batch_size: int):
 
 
 def query_all(n_jobs: int, batch_size: int):
-    java_save_path = os.path.join("../../benchmark/Phase3", f"maven_releases.json")
+    java_save_path = os.path.join("../../benchmark/phase3", f"maven_releases.json")
     if os.path.exists(java_save_path):
         with open(java_save_path) as inf:
             java_releases = json.load(inf)
@@ -152,7 +152,7 @@ def query_all(n_jobs: int, batch_size: int):
         java_releases = {}
 
     java_libraries = []
-    with open("../../benchmark/Phase3/java_library_versions.csv") as inf:
+    with open("../../benchmark/phase3/java_library_versions.csv") as inf:
         for line in inf:
             java_libraries.append(line.split(",")[0])
     remaining_java_libraries = list(set(java_libraries) - set(java_releases.keys()))
@@ -175,7 +175,7 @@ def query_all(n_jobs: int, batch_size: int):
     with open(java_save_path, "w") as outf:
         json.dump(java_releases, outf, indent=2)
 
-    py_save_path = os.path.join("../../benchmark/Phase3", f"pypi_releases.json")
+    py_save_path = os.path.join("../../benchmark/phase3", f"pypi_releases.json")
     if os.path.exists(py_save_path):
         with open(py_save_path) as inf:
             py_releases = json.load(inf)
@@ -183,7 +183,7 @@ def query_all(n_jobs: int, batch_size: int):
         py_releases = {}
 
     py_libraries = []
-    with open("../../benchmark/Phase3/py_library_versions.csv") as inf:
+    with open("../../benchmark/phase3/py_library_versions.csv") as inf:
         for line in inf:
             py_libraries.append(line.split(",")[0])
     remaining_py_libraries = list(set(py_libraries) - set(py_releases.keys()))
@@ -208,9 +208,9 @@ def query_all(n_jobs: int, batch_size: int):
 
 def canonic_names():
     result = {}
-    for k, v in json.load(open("../../benchmark/Phase3/pypi_releases.json")).items():
+    for k, v in json.load(open("../../benchmark/phase3/pypi_releases.json")).items():
         result[canonicalize_name(k)] = v
-    with open("../../benchmark/Phase3/pypi_releases.json", "w") as outf:
+    with open("../../benchmark/phase3/pypi_releases.json", "w") as outf:
         json.dump(result, outf, indent=2)
 
 

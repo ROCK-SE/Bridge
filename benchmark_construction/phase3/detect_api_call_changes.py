@@ -11,7 +11,7 @@ from pymongo.collection import Collection
 from tqdm.auto import tqdm
 from utils import insert_many_skip_large
 
-data_folder = "../../benchmark/Phase3"
+data_folder = "../../benchmark/phase3"
 py_imports = json.load(open(f"{data_folder}/py_imports.json"))
 java_imports = json.load(open(f"{data_folder}/java_imports.json"))
 lang_lib_imports = {"py": py_imports, "java": java_imports}

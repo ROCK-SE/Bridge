@@ -86,7 +86,7 @@ def list_pypi_libraries(retry: int = 5) -> list[str] | None:
             libraries = [canonicalize_name(proj["name"]) for proj in projects]
             libraries = list(set(libraries))
             print(f"{len(libraries)} PyPI libraries")
-            with open("../../benchmark/Phase1/all_pypi_libraries.csv", "w") as outf:
+            with open("../../benchmark/phase1/all_pypi_libraries.csv", "w") as outf:
                 for pkg in libraries:
                     outf.write(f"{pkg}\n")
             return libraries

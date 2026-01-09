@@ -14,16 +14,16 @@ CONFIG_TYPES = [
     "pom.xml",
 ]
 
-if os.path.exists("../../benchmark/Phase1/all_pypi_libraries.csv"):
+if os.path.exists("../../benchmark/phase1/all_pypi_libraries.csv"):
     PYPI_LIBRARIES = (
-        open("../../benchmark/Phase1/all_pypi_libraries.csv").read().splitlines()
+        open("../../benchmark/phase1/all_pypi_libraries.csv").read().splitlines()
     )
 else:
     PYPI_LIBRARIES = list_pypi_libraries()
 
-if os.path.exists("../../benchmark/Phase1/all_maven_libraries.csv"):
+if os.path.exists("../../benchmark/phase1/all_maven_libraries.csv"):
     MAVEN_LIBRARIES = (
-        open("../../benchmark/Phase1/all_maven_libraries.csv").read().splitlines()
+        open("../../benchmark/phase1/all_maven_libraries.csv").read().splitlines()
     )
 else:
     raise Exception(
@@ -88,7 +88,7 @@ def filter(file_type: str):
     if file_type == "pom.xml":
         get_updates = get_updates_java
         ALL_LIBRARIES = MAVEN_LIBRARIES
-    prefix = "../../benchmark/Phase1"
+    prefix = "../../benchmark/phase1"
     commits_path = os.path.join(prefix, f"{file_type}_candidate_update_commits.csv")
     dependency_path = os.path.join(prefix, f"{file_type}_dependencies.json")
 
@@ -189,7 +189,7 @@ def filter2(file_type: str):
     if file_type == "pom.xml":
         get_updates = get_updates_java2
         ALL_LIBRARIES = MAVEN_LIBRARIES
-    prefix = "../../benchmark/Phase1"
+    prefix = "../../benchmark/phase1"
     commits_path = os.path.join(prefix, f"{file_type}_candidate_update_commits.csv")
     dependency_path = os.path.join(prefix, f"{file_type}_dependencies.json")
 

@@ -22,12 +22,12 @@ logger.setLevel(logging.INFO)
 
 def get_latest_java_releases():
     lib_vers = {}
-    with open(f"../../benchmark/Phase3/java_library_versions.csv") as inf:
+    with open(f"../../benchmark/phase3/java_library_versions.csv") as inf:
         for line in inf:
             lib, ver = line.strip("\n").split(",", 1)
             lib_vers[lib] = lib_vers.get(lib, [])
             lib_vers[lib].append(ver)
-    lib_all_vers = json.load(open(f"../../benchmark/Phase3/maven_releases.json"))
+    lib_all_vers = json.load(open(f"../../benchmark/phase3/maven_releases.json"))
 
     result = []
     for lib, vers in lib_vers.items():
@@ -43,20 +43,20 @@ def get_latest_java_releases():
                 common_vers, key=lambda v: tuple(int(p) for p in v[0].split("."))
             )
             result.append((lib, latest_ver))
-    with open(f"../../benchmark/Phase3/java_latest_release", "w") as outf:
+    with open(f"../../benchmark/phase3/java_latest_release", "w") as outf:
         for p, v in result:
             outf.write(f"{p},{','.join(v)}\n")
 
 
 def download_python_libraries(n_jobs: int, dest_folder: str):
     lib_whls = []
-    with open("../../benchmark/Phase3/pypi_releases.json") as inf:
+    with open("../../benchmark/phase3/pypi_releases.json") as inf:
         for lib, vw in json.load(inf).items():
             if not vw:
                 continue
             lib_whls.append(lib, vw["latest_whl"])
     df = pd.DataFrame(lib_whls, columns=["name", "url"])
-    df.to_csv("../../benchmark/Phase3/py_latest_release", index=False, header=False)
+    df.to_csv("../../benchmark/phase3/py_latest_release", index=False, header=False)
     print(f"{len(df)} library wheels")
     mirror = config.get("mirror", None)
     if mirror:
@@ -74,7 +74,7 @@ def download_python_libraries(n_jobs: int, dest_folder: str):
 
 
 def download_java_libraries(n_jobs: int, dest_folder: str):
-    latest_release_path = "../../benchmark/Phase3/java_latest_release"
+    latest_release_path = "../../benchmark/phase3/java_latest_release"
     if not os.path.exists(latest_release_path):
         get_latest_java_releases()
     data = []
@@ -190,7 +190,7 @@ def extract_import_prefixes(filepath: str, lang: str):
 
 
 def extract(dest_folder: str, lang: str):
-    latest_release_path = f"../../benchmark/Phase3/{lang}_latest_release"
+    latest_release_path = f"../../benchmark/phase3/{lang}_latest_release"
     lib_imports = {}
 
     with open(latest_release_path) as inf:
@@ -217,7 +217,7 @@ def extract(dest_folder: str, lang: str):
             except:
                 logger.error(f"{name}-{version}: {path} extract imports error")
 
-    with open(f"../../benchmark/Phase3/{lang}_imports.json", "w") as outf:
+    with open(f"../../benchmark/phase3/{lang}_imports.json", "w") as outf:
         json.dump(lib_imports, outf)
 
 

@@ -443,7 +443,7 @@ def read_raw_blob(idx: int, offset: int, length: int) -> bytes:
 
 def generate_batch(lang: str, batch_size: int):
     batch = []
-    with open(f"../../benchmark/Phase2/{lang}_blob.idx") as f:
+    with open(f"../../benchmark/phase2/{lang}_blob.idx") as f:
         for line in f:
             blob_sha, offset, length = line.strip("\n").split(",")
             batch.append([blob_sha, int(offset), int(length)])
@@ -473,7 +473,7 @@ def parse_batch(lang: str, i: int, batch: list):
         res[blob_sha] = api_calls
 
     logger.error(f"{lang} {i}: Start dumping results...")
-    with open(f"../../benchmark/Phase2/{lang}_api_calls.json.{i}", "w") as outf:
+    with open(f"../../benchmark/phase2/{lang}_api_calls.json.{i}", "w") as outf:
         json.dump(res, outf)
 
 
@@ -482,7 +482,7 @@ def dump_api_call(lang: str, num_batches: int):
     db.drop_collection(col_name)
     api_calls_col = db[col_name]
     for i in trange(num_batches, file=sys.stdout):
-        filepath = f"../../benchmark/Phase2/{lang}_api_calls.json.{i}"
+        filepath = f"../../benchmark/phase2/{lang}_api_calls.json.{i}"
         with open(filepath) as f:
             data = []
             for blob_sha, values in json.load(f).items():
@@ -501,7 +501,7 @@ def dump_api_call(lang: str, num_batches: int):
 
 
 def parse_all(lang: str, n_jobs: int = 1, batch_size: int = 1):
-    total_lines = sum(1 for i in open(f"../../benchmark/Phase2/{lang}_blob.idx", "rb"))
+    total_lines = sum(1 for i in open(f"../../benchmark/phase2/{lang}_blob.idx", "rb"))
     num_batches = math.ceil(total_lines / batch_size)
     print(
         f"{lang}: {n_jobs} processes",
