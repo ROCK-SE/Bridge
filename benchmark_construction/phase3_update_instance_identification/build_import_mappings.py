@@ -20,51 +20,44 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def get_latest_releases(lang: str):
-    pkg_vers = {}
-    with open(f"../benchmark/updates/{lang}_packages.csv") as inf:
+def get_latest_java_releases():
+    lib_vers = {}
+    with open(f"../../benchmark/Phase3/java_library_versions.csv") as inf:
         for line in inf:
-            pkg, ver = line.strip("\n").split(",", 1)
-            pkg_vers[pkg] = pkg_vers.get(pkg, [])
-            pkg_vers[pkg].append(ver)
-    platform = "pypi" if lang == "py" else "maven"
-    pkg_all_vers = json.load(open(f"../benchmark/updates/{platform}_releases.json"))
+            lib, ver = line.strip("\n").split(",", 1)
+            lib_vers[lib] = lib_vers.get(lib, [])
+            lib_vers[lib].append(ver)
+    lib_all_vers = json.load(open(f"../../benchmark/Phase3/maven_releases.json"))
 
     result = []
-    for pkg, vers in pkg_vers.items():
-        all_vers = pkg_all_vers.get(pkg)
+    for lib, vers in lib_vers.items():
+        all_vers = lib_all_vers.get(lib)
         if all_vers is None:
             continue
-        if lang == "java":
-            common_vers = [
-                [v]
-                for v in list(set(vers).intersection(set(all_vers)))
-                if is_strict_ver(v)
-            ]
-        elif lang == "py":
-            common_vers = [[ver, url] for ver, url in all_vers.items() if ver in vers]
+        common_vers = [
+            [v] for v in list(set(vers).intersection(set(all_vers))) if is_strict_ver(v)
+        ]
 
         if common_vers:
             latest_ver = max(
                 common_vers, key=lambda v: tuple(int(p) for p in v[0].split("."))
             )
-            result.append((pkg, latest_ver))
-    with open(f"../benchmark/updates/{lang}_latest_release", "w") as outf:
+            result.append((lib, latest_ver))
+    with open(f"../../benchmark/Phase3/java_latest_release", "w") as outf:
         for p, v in result:
             outf.write(f"{p},{','.join(v)}\n")
 
 
-def download_python_packages(n_jobs: int, dest_folder: str):
-    latest_release_path = "../benchmark/updates/py_latest_release"
-    if not os.path.exists(latest_release_path):
-        get_latest_releases("py")
-    df = pd.read_csv(
-        latest_release_path,
-        low_memory=False,
-        keep_default_na=False,
-        names=["name", "version", "url"],
-    )
-    print(f"{len(df)} package wheels")
+def download_python_libraries(n_jobs: int, dest_folder: str):
+    lib_whls = []
+    with open("../../benchmark/Phase3/pypi_releases.json") as inf:
+        for lib, vw in json.load(inf).items():
+            if not vw:
+                continue
+            lib_whls.append(lib, vw["latest_whl"])
+    df = pd.DataFrame(lib_whls, columns=["name", "url"])
+    df.to_csv("../../benchmark/Phase3/py_latest_release", index=False, header=False)
+    print(f"{len(df)} library wheels")
     mirror = config.get("mirror", None)
     if mirror:
         df.loc[:, "url"] = df["url"].apply(
@@ -80,10 +73,10 @@ def download_python_packages(n_jobs: int, dest_folder: str):
     )
 
 
-def download_java_packages(n_jobs: int, dest_folder: str):
-    latest_release_path = "../benchmark/updates/java_latest_release"
+def download_java_libraries(n_jobs: int, dest_folder: str):
+    latest_release_path = "../../benchmark/Phase3/java_latest_release"
     if not os.path.exists(latest_release_path):
-        get_latest_releases("java")
+        get_latest_java_releases()
     data = []
     with open(latest_release_path) as f:
         for line in f:
@@ -197,18 +190,19 @@ def extract_import_prefixes(filepath: str, lang: str):
 
 
 def extract(dest_folder: str, lang: str):
-    latest_release_path = f"../benchmark/updates/{lang}_latest_release"
-    pkg_imports = {}
+    latest_release_path = f"../../benchmark/Phase3/{lang}_latest_release"
+    lib_imports = {}
 
     with open(latest_release_path) as inf:
         for line in tqdm(inf, file=sys.stdout):
             entries = line.strip("\n").split(",")
-            name, version = entries[0], entries[1]
+            name = entries[0]
             if lang == "py":
-                url = entries[2]
+                url = entries[-1]
                 filename = url.split("/")[-1]
                 path = os.path.join(dest_folder, "python", name, filename)
             elif lang == "java":
+                version = entries[1]
                 _, path = gen_jar_url_path(name, version)
                 path = os.path.join(dest_folder, "java", path)
 
@@ -219,35 +213,35 @@ def extract(dest_folder: str, lang: str):
             try:
                 imports = extract_import_prefixes(path, lang)
                 if imports:
-                    pkg_imports[name] = imports
+                    lib_imports[name] = imports
             except:
                 logger.error(f"{name}-{version}: {path} extract imports error")
 
-    with open(f"../benchmark/updates/{lang}_imports.json", "w") as outf:
-        json.dump(pkg_imports, outf)
+    with open(f"../../benchmark/Phase3/{lang}_imports.json", "w") as outf:
+        json.dump(lib_imports, outf)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="python build_import_mappings.py",
-        description="Download wheel/jar file of the latest release for each updated Python package / Java library and build import mappings",
+        description="Download wheel/jar file of the latest release for each updated Python library / Java library and build import mappings",
     )
     parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
     parser.add_argument("-d", "--dest_folder", required=True, type=str)
     parser.add_argument(
-        "--python", action="store_true", help="download Python package wheels"
+        "--python", action="store_true", help="download Python library wheels"
     )
     parser.add_argument(
-        "--java", action="store_true", help="download Java package jars"
+        "--java", action="store_true", help="download Java library jars"
     )
     parser.add_argument("--extract", action="store_true", help="extract import names")
 
     args = parser.parse_args()
     if args.python:
-        download_python_packages(args.n_jobs, args.dest_folder)
+        download_python_libraries(args.n_jobs, args.dest_folder)
         if args.extract:
             extract(args.dest_folder, "py")
     if args.java:
-        download_java_packages(args.n_jobs, args.dest_folder)
+        download_java_libraries(args.n_jobs, args.dest_folder)
         if args.extract:
             extract(args.dest_folder, "java")
