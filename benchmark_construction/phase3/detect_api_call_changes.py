@@ -9,7 +9,6 @@ from joblib import Parallel, delayed
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from tqdm.auto import tqdm
-from utils import insert_many_skip_large
 
 data_folder = "../../benchmark/phase3"
 py_imports = json.load(open(f"{data_folder}/py_imports.json"))
@@ -285,5 +284,5 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    # main("py", args.n_jobs)
+    main("py", args.n_jobs)
     main("java", args.n_jobs)

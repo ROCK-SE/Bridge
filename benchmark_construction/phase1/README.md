@@ -103,4 +103,4 @@ python dump_data -c -b -u
 ```
 
 ## Get Data Statistics of This Phase
-Run `phase1_analysis.ipynb` in the root folder to obtain Table 2 in the paper.
+Run `phase1_statistics.ipynb` in the root folder to obtain Table 2 in the paper.
