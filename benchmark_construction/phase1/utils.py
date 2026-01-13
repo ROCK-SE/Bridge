@@ -56,11 +56,19 @@ def parse_reqs(reqs: list[str]) -> dict[str, str]:
 
 
 def read_blob(sha: str) -> str | None:
-    """Read a blob's content by it sha1 value."""
+    """Read a blob's content by its sha1 value."""
     try:
         return woc.show_content("blob", sha)
     except:
         return None
+
+
+def read_commit(sha: str) -> str:
+    """Read a commit's message by its sha1 value."""
+    try:
+        return woc.show_content("commit", sha)[-1]
+    except:
+        return ""
 
 
 def list_pypi_libraries(retry: int = 5) -> list[str] | None:

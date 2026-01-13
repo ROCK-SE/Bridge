@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 import pandas as pd
 from pymongo import MongoClient
 from tqdm import tqdm
-from utils import insert_many_skip_large
+from utils import insert_many_skip_large, read_commit
 
 client = MongoClient("127.0.0.1", 27017)
 db = client["bridge"]
@@ -87,6 +87,7 @@ def merge_update_commits(lang: str):
                 "commit": commit,
                 "configuration_files": cfg_file_changes,
                 "code_files": code_file_changes,
+                "commit_message": read_commit(commit),
             }
         )
         if len(data) == 10000:
