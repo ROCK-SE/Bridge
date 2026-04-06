@@ -174,6 +174,8 @@ def update_relevant_api_call_changes(
     res = []
     for code_file in code_files:
         filepath = code_file["filepath"]
+        if "third_party" in filepath.split("/"):
+            continue
         # select library updates in the closest configuration file
         relevant_updates = select_relevant_updates(filepath, cfg_files)
 
