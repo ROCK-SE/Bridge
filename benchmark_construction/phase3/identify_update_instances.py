@@ -3,14 +3,16 @@ import json
 import math
 import re
 
-import pandas as pd
+import numpy as np
 from Levenshtein import ratio
 from pymongo import MongoClient
+from scipy.optimize import linear_sum_assignment
 from tqdm.auto import tqdm
 from utils import insert_many_skip_large
 
 client = MongoClient("127.0.0.1", 27017)
 db = client["bridge"]
+gb2us = json.load(open("gb2us.json"))
 
 
 def split_java_identifier(identifier: str) -> list[str]:
@@ -43,25 +45,21 @@ def split_java_class_method_names(full_api_name: str) -> tuple[list[str], str]:
     return parts[i:-1], parts[-1]
 
 
-def java_name_similarity(parts1: list[str], parts2: list[str]) -> float:
-    if parts1 == parts2:
-        return 1.0
+def levenshtein_based_similarity(parts1: list[str], parts2: list[str]) -> float:
+    cost = np.zeros((len(parts1), len(parts2)))
+    for i, p1 in enumerate(parts1):
+        for j, p2 in enumerate(parts2):
+            cost[i][j] = -ratio(p1, p2)
 
-    types = [
-        "int",
-        "long",
-        "byte",
-        "short",
-        "float",
-        "double",
-        "boolean",
-        "char",
-        "string",
-    ]
-    t1 = [k for k in parts1 if k in types]
-    t2 = [k for k in parts1 if k in types]
-    if t1 != t2:
-        return 0.0
+    row_ind, col_ind = linear_sum_assignment(cost)
+    sim_sum = 0.0
+    for row, col in zip(row_ind, col_ind):
+        if -cost[row][col] > 0.5:
+            sim_sum -= float(cost[row][col])
+    return sim_sum / max(len(parts1), len(parts2))
+
+
+def java_jaccard_based_similarity(parts1: list[str], parts2: list[str]) -> float:
     total = len(parts1) + len(parts2)
     num_common_parts = 0
     for p1 in parts1:
@@ -71,13 +69,46 @@ def java_name_similarity(parts1: list[str], parts2: list[str]) -> float:
                 total -= 1
                 parts2.remove(p2)
                 break
-            if p1.startswith(p2) or p2.startswith(p1):
-                num_common_parts += 0.5
-                total -= 1
-                parts2.remove(p2)
-                break
+            # if p1.startswith(p2) or p2.startswith(p1):
+            #     num_common_parts += 0.5
+            #     total -= 1
+            #     parts2.remove(p2)
+            #     break
 
     return num_common_parts / total
+
+
+def java_name_similarity(parts1: list[str], parts2: list[str]) -> float:
+    if parts1 == parts2:
+        return 1.0
+
+    if "".join(parts1) == "".join(parts2):
+        return 1.0
+
+    if ("async" in parts1) and ("async" not in parts2):
+        return 0.0
+
+    if ("async" in parts2) and ("async" not in parts1):
+        return 0.0
+
+    types = [
+        "byte",
+        "short",
+        "int",
+        "long",
+        "float",
+        "double",
+        "boolean",
+        "char",
+    ]
+    t1 = [k for k in parts1 if k in types]
+    t2 = [k for k in parts2 if k in types]
+    if (len(t1) > 0) and (len(t2) > 0) and (t1 != t2):
+        return 0.0
+    parts1 = [gb2us.get(k, k) for k in parts1 if k not in types]
+    parts2 = [gb2us.get(k, k) for k in parts2 if k not in types]
+
+    return java_jaccard_based_similarity(parts1, parts2)
 
 
 def java_method_name_similarity(
@@ -112,6 +143,24 @@ def java_method_name_similarity(
         return 0.0
     if not parts2:
         return 0.0
+
+    logging_levels = [
+        "trace",
+        "verbose",
+        "debug",
+        "info",
+        "notice",
+        "warn",
+        "warning",
+        "error",
+        "critical",
+        "fatal",
+    ]
+    log_level1 = set(logging_levels).intersection(set(parts1))
+    log_level2 = set(logging_levels).intersection(set(parts2))
+    if log_level1 and log_level2 and (log_level1 != log_level2):
+        return 0.0
+
     # List borrowed from RepFinder
     VERBS = [
         "add",
@@ -144,17 +193,14 @@ def java_method_name_similarity(
                 return 0.0
             if (parts2[1] == "not") and (parts1[1] != "not"):
                 return 0.0
-            if (parts1[1] == "as") and (parts2 == "as"):
-                return
 
         return java_name_similarity(parts1[1:], parts2[1:])
 
     if parts1[0] in ["get", "is"]:
-        return java_name_similarity(parts1[1:], parts2)
+        parts1 = parts1[1:]
 
     if parts2[0] in ["get", " is"]:
-        return java_name_similarity(parts1, parts2[1:])
-
+        parts2 = parts2[1:]
     return java_name_similarity(parts1, parts2)
 
 
@@ -227,9 +273,9 @@ def java_arguments_similarity(arguments1: list[dict], arguments2: list[dict]) ->
     func = lambda arguments: [arg["value"] for arg in arguments]
     arguments1 = func(arguments1)
     arguments2 = func(arguments2)
-    lensum = len(arguments1) + len(arguments2)
-    if lensum == 0:
-        return 0.6
+    # lensum = len(arguments1) + len(arguments2)
+    # if lensum == 0:
+    #     return 0.6
     return ratio(arguments1, arguments2)
 
 
@@ -328,7 +374,21 @@ def python_custom_equal(p1: str, p2: str) -> bool:
         return True
     if p1.startswith(p2) or p2.startswith(p1):
         return True
+    if p1.endswith(p2) or p2.endswith(p1):
+        return True
     return False
+
+
+def python_jaccard_based_similarity(parts1: list[str], parts2: list[str]) -> float:
+    num_common_parts = 0
+    total = len(parts1) + len(parts2)
+    for p1 in parts1:
+        for p2 in parts2:
+            if python_custom_equal(p1, p2):
+                parts2.remove(p2)
+                num_common_parts += 1
+                break
+    return num_common_parts / (total - num_common_parts)
 
 
 def python_name_similarity(name1: str, name2: str, min_word_len: int = 1) -> float:
@@ -346,15 +406,7 @@ def python_name_similarity(name1: str, name2: str, min_word_len: int = 1) -> flo
     if parts1 == parts2:
         return 1.0
 
-    max_len = max(len(parts1), len(parts2))
-    num_common_parts = 0
-    for p1 in parts1:
-        for p2 in parts2:
-            if python_custom_equal(p1, p2):
-                parts2.remove(p2)
-                num_common_parts += 1
-                break
-    return num_common_parts / max_len
+    return levenshtein_based_similarity(parts1, parts2)
 
 
 def is_compact(method_name1: str, method_name2: str) -> bool:
@@ -381,16 +433,22 @@ def python_api_name_similarity(
 
     norm_method_name1 = method_name1.replace("_", "").lower()
     norm_method_name2 = method_name2.replace("_", "").lower()
-    # AutoTokenizer.from_pretrained BertTokenizer.from_pretrained
-    if method_name1 == method_name2:
-        if (len(api_parts1) > 1) and (len(api_parts2) > 1):
-            if api_parts1[-2][0].isupper() and api_parts2[-2][0].isupper():
-                return python_name_similarity(api_parts1[-2], api_parts2[-2])
-        return 1.0
-    # arg_max vs argmin
+    # arg_max vs argmax
     if norm_method_name1 == norm_method_name2:
         return 1.0
 
+    # AutoTokenizer.from_pretrained BertTokenizer.from_pretrained
+    if (len(api_parts1) > 1) and api_parts1[-2][0].isupper():
+        method_name1 = f"{api_parts1[-2]}_{api_parts1[-1]}"
+    if (len(api_parts2) > 1) and api_parts2[-2][0].isupper():
+        method_name2 = f"{api_parts2[-2]}_{api_parts2[-1]}"
+    # if method_name1 == method_name2:
+    #     if (len(api_parts1) > 1) and (len(api_parts2) > 1):
+    #         if api_parts1[-2][0].isupper() and api_parts2[-2][0].isupper():
+    #             return python_name_similarity(api_parts1[-2], api_parts2[-2])
+    #     return 1.0
+
+    # mean_squared_error vs mse
     if is_compact(method_name1, method_name2):
         return 1.0
 
@@ -441,6 +499,7 @@ def python_arguments_similarity(
         if arg_values1[i] == arg_values2[i]:
             num_commons2 += 1
 
+    # print(num_commons, num_commons2, num_args1 + num_args2)
     return max(num_commons, num_commons2) / (num_args1 + num_args2 - num_commons)
 
 
