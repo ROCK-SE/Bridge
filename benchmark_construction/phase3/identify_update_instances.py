@@ -4,7 +4,7 @@ import math
 import re
 
 import numpy as np
-from Levenshtein import ratio
+from Levenshtein import distance, ratio
 from pymongo import MongoClient
 from scipy.optimize import linear_sum_assignment
 from tqdm.auto import tqdm
@@ -61,6 +61,8 @@ def levenshtein_based_similarity(parts1: list[str], parts2: list[str]) -> float:
 
 def java_jaccard_based_similarity(parts1: list[str], parts2: list[str]) -> float:
     total = len(parts1) + len(parts2)
+    if total == 0:
+        return 0
     num_common_parts = 0
     for p1 in parts1:
         for p2 in parts2:
@@ -287,6 +289,28 @@ def lte(a: float, b: float, rel_tol=1e-09, abs_tol=0.0) -> bool:
     return math.isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol) or (a < b)
 
 
+def java_similarity_metrics(
+    api_call1: dict,
+    api_call2: dict,
+    min_word_len: int = 1,
+):
+    full_name1 = api_call1["full_name"]
+    full_name2 = api_call2["full_name"]
+    class_sim, method_sim = java_api_name_similarity(
+        full_name1, full_name2, min_word_len
+    )
+
+    arguments1 = api_call1["arguments"]
+    arguments2 = api_call2["arguments"]
+    arg_sim = java_arguments_similarity(arguments1, arguments2)
+
+    offset1 = api_call1["offset"]
+    offset2 = api_call2["offset"]
+    offset_sim = offset_similarity(offset1, offset2)
+
+    return [class_sim, method_sim, arg_sim, offset_sim]
+
+
 def java_api_call_similarity(
     api_call1: dict,
     api_call2: dict,
@@ -439,9 +463,9 @@ def python_api_name_similarity(
 
     # AutoTokenizer.from_pretrained BertTokenizer.from_pretrained
     if (len(api_parts1) > 1) and api_parts1[-2][0].isupper():
-        method_name1 = f"{api_parts1[-2]}_{api_parts1[-1]}"
-    if (len(api_parts2) > 1) and api_parts2[-2][0].isupper():
-        method_name2 = f"{api_parts2[-2]}_{api_parts2[-1]}"
+        if (len(api_parts2) > 1) and api_parts2[-2][0].isupper():
+            method_name1 = f"{api_parts1[-2]}_{api_parts1[-1]}"
+            method_name2 = f"{api_parts2[-2]}_{api_parts2[-1]}"
     # if method_name1 == method_name2:
     #     if (len(api_parts1) > 1) and (len(api_parts2) > 1):
     #         if api_parts1[-2][0].isupper() and api_parts2[-2][0].isupper():
@@ -455,7 +479,7 @@ def python_api_name_similarity(
     return python_name_similarity(method_name1, method_name2, min_word_len)
 
 
-def python_arguments_similarity(
+def python_arguments_similarity2(
     arguments1: list[dict], arguments2: list[dict]
 ) -> float:
     num_args1 = len(arguments1)
@@ -501,6 +525,74 @@ def python_arguments_similarity(
 
     # print(num_commons, num_commons2, num_args1 + num_args2)
     return max(num_commons, num_commons2) / (num_args1 + num_args2 - num_commons)
+
+
+def python_arguments_similarity(
+    arguments1: list[dict], arguments2: list[dict]
+) -> float:
+    num_args1 = len(arguments1)
+    num_args2 = len(arguments2)
+    if (num_args1 + num_args2) == 0:
+        return 1.0
+
+    pos_args1 = [arg["value"] for arg in arguments1 if arg["arg_type"] == "positional"]
+    pos_args2 = [arg["value"] for arg in arguments2 if arg["arg_type"] == "positional"]
+    num_commons = (
+        len(pos_args1)
+        + len(pos_args2)
+        - distance(pos_args1, pos_args2, weights=(1, 1, 2))
+    )
+
+    star_pos1 = [arg["value"] for arg in arguments1 if arg["arg_type"] == "*positional"]
+    star_pos2 = [arg["value"] for arg in arguments2 if arg["arg_type"] == "*positional"]
+    num_commons += (
+        len(star_pos1)
+        + len(star_pos2)
+        - distance(star_pos1, star_pos2, weights=(1, 1, 2))
+    )
+
+    star_kw1 = [arg["value"] for arg in arguments1 if arg["arg_type"] == "**keyword"]
+    star_kw2 = [arg["value"] for arg in arguments2 if arg["arg_type"] == "**keyword"]
+    num_commons += 2 * len(set(star_kw1).intersection(star_kw2))
+
+    kw_args1 = {
+        arg["key"]: arg["value"] for arg in arguments1 if arg["arg_type"] == "keyword"
+    }
+    kw_args2 = {
+        arg["key"]: arg["value"] for arg in arguments2 if arg["arg_type"] == "keyword"
+    }
+    for k, v1 in kw_args1.items():
+        v2 = kw_args2.get(k)
+        if v2:
+            num_commons += 1
+        if v1 == v2:
+            num_commons += 1
+    sim1 = num_commons / (num_args1 + num_args2)
+
+    arg_values1 = [arg["value"] for arg in arguments1]
+    arg_values2 = [arg["value"] for arg in arguments2]
+    sim2 = ratio(arg_values1, arg_values2)
+    return max(sim1, sim2)
+
+
+def python_similarity_metrics(
+    api_call1: dict,
+    api_call2: dict,
+    min_word_len: int = 1,
+):
+    full_name1 = api_call1["full_name"]
+    full_name2 = api_call2["full_name"]
+    name_sim = python_api_name_similarity(full_name1, full_name2, min_word_len)
+
+    arguments1 = api_call1["arguments"]
+    arguments2 = api_call2["arguments"]
+    arg_sim = python_arguments_similarity(arguments1, arguments2)
+
+    offset1 = api_call1["offset"]
+    offset2 = api_call2["offset"]
+    offset_sim = offset_similarity(offset1, offset2)
+
+    return [name_sim, arg_sim, offset_sim]
 
 
 def python_api_call_similarity(
