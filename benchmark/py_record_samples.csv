@@ -1,4 +1,4 @@
-_id,library,old_version,new_version
+_id,library,version_before,version_after
 698c1129ea76f58388817bbf,django,3.2.14,4.0.8
 698c1129ea76f583888177ab,django,1.9.13,1.11.4
 698c1129ea76f5838880acbc,django,1.11.4,2.0.1
