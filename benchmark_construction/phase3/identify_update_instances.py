@@ -408,7 +408,7 @@ def python_jaccard_based_similarity(parts1: list[str], parts2: list[str]) -> flo
     total = len(parts1) + len(parts2)
     for p1 in parts1:
         for p2 in parts2:
-            if python_custom_equal(p1, p2):
+            if p1 == p2:
                 parts2.remove(p2)
                 num_common_parts += 1
                 break
@@ -430,7 +430,7 @@ def python_name_similarity(name1: str, name2: str, min_word_len: int = 1) -> flo
     if parts1 == parts2:
         return 1.0
 
-    return levenshtein_based_similarity(parts1, parts2)
+    return python_jaccard_based_similarity(parts1, parts2)
 
 
 def is_compact(method_name1: str, method_name2: str) -> bool:
@@ -452,25 +452,25 @@ def python_api_name_similarity(
 ) -> float:
     api_parts1 = api_name1.split(".")
     api_parts2 = api_name2.split(".")
+
+    stopword_toplevels = ["azure", "google", "hdx"]
+    if (api_parts1[0] in stopword_toplevels) or (api_parts2[0] in stopword_toplevels):
+        return 0.0
     method_name1 = api_parts1[-1]
     method_name2 = api_parts2[-1]
+
+    # AutoTokenizer.from_pretrained BertTokenizer.from_pretrained
+    if method_name1 == method_name2:
+        if (len(api_parts1) > 1) and (len(api_parts2) > 1):
+            if api_parts1[-2][0].isupper() and api_parts2[-2][0].isupper():
+                return python_name_similarity(api_parts1[-2], api_parts2[-2])
+        return 1.0
 
     norm_method_name1 = method_name1.replace("_", "").lower()
     norm_method_name2 = method_name2.replace("_", "").lower()
     # arg_max vs argmax
     if norm_method_name1 == norm_method_name2:
         return 1.0
-
-    # AutoTokenizer.from_pretrained BertTokenizer.from_pretrained
-    if (len(api_parts1) > 1) and api_parts1[-2][0].isupper():
-        if (len(api_parts2) > 1) and api_parts2[-2][0].isupper():
-            method_name1 = f"{api_parts1[-2]}_{api_parts1[-1]}"
-            method_name2 = f"{api_parts2[-2]}_{api_parts2[-1]}"
-    # if method_name1 == method_name2:
-    #     if (len(api_parts1) > 1) and (len(api_parts2) > 1):
-    #         if api_parts1[-2][0].isupper() and api_parts2[-2][0].isupper():
-    #             return python_name_similarity(api_parts1[-2], api_parts2[-2])
-    #     return 1.0
 
     # mean_squared_error vs mse
     if is_compact(method_name1, method_name2):
