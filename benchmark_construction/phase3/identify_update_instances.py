@@ -42,7 +42,7 @@ def split_java_class_method_names(full_api_name: str) -> tuple[list[str], str]:
             continue
         if part[0].isupper():
             break
-    return parts[i:-1], parts[-1]
+    return parts[-2:-1], parts[-1]
 
 
 def levenshtein_based_similarity(parts1: list[str], parts2: list[str]) -> float:
@@ -107,8 +107,8 @@ def java_name_similarity(parts1: list[str], parts2: list[str]) -> float:
     t2 = [k for k in parts2 if k in types]
     if (len(t1) > 0) and (len(t2) > 0) and (t1 != t2):
         return 0.0
-    parts1 = [gb2us.get(k, k) for k in parts1 if k not in types]
-    parts2 = [gb2us.get(k, k) for k in parts2 if k not in types]
+    parts1 = [gb2us.get(k, k) for k in parts1]
+    parts2 = [gb2us.get(k, k) for k in parts2]
 
     return java_jaccard_based_similarity(parts1, parts2)
 
@@ -167,6 +167,7 @@ def java_method_name_similarity(
     VERBS = [
         "add",
         "get",
+        "create",
         "set",
         "is",
         "have",

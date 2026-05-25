@@ -103,6 +103,7 @@ def check_annotated_data(lang: str, col):
             print(row[0], "new callees")
         parts_before = [int(_) for _ in row[2].split(".")]
         parts_after = [int(_) for _ in row[3].split(".")]
+        # commons-io:commons-io case
         if parts_before[0] == 20030203:
             parts_before[0] = -20030203
         if parts_after[0] == 20030203:
