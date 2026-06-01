@@ -1,5 +1,7 @@
 import logging
+import zipfile
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import tree_sitter_python as tspython
 from tree_sitter import Language, Node, Parser
@@ -242,3 +244,35 @@ def extract_symbols_in_file(node: Node, info: ModuleInfo):
 
     for child in node.named_children:
         extract_symbols_in_file(child, info)
+
+
+class APIResolver:
+    """Resolve an API's definition location in a Wheel file"""
+
+    def __init__(self, wheel_path: str):
+        self.wheel_path = wheel_path
+        self.zf = zipfile.ZipFile(wheel_path)
+        self.module_to_path: dict[str, str] = {}
+        # Cache the extracted symbols for a file/module in the wheel.
+        self.cache: dict[str, ModuleInfo] = {}
+
+        self._index_modules()
+
+    def close(self):
+        self.zf.close()
+
+    def _index_modules(self):
+        for path in self.zf.namelist():
+            if not path.endswith(".py"):
+                continue
+
+            if ".dist-info/" in path or ".data/" in path:
+                continue
+
+            p = Path(path)
+            if p.name == "__init__.py":
+                module_name = ".".join(p.parts[:-1])
+            else:
+                module_name = ".".join(p.with_suffix("").parts)
+
+            self.module_to_path[module_name] = path
