@@ -23,13 +23,13 @@ def sample_records(df):
         if fqns.issubset(existing_old_old_fqns):
             continue
         existing_old_old_fqns |= fqns
-        res.append([row[0], row.library, row.old_version, row.new_version])
+        res.append([row[0], row.library, row.version_before, row.version_after])
         if len(existing_old_old_fqns) >= 10:
             break
     return res
 
 
-def sample_records(lang: str):
+def sample(lang: str):
     data = []
     col = db[f"{lang}_api_call_changes"]
     for doc in tqdm(col.find({}), total=col.estimated_document_count()):
@@ -83,11 +83,11 @@ def sample_records(lang: str):
     print(f"{lang}: {len(record_samples)} sampled records")
     pd.DataFrame(
         record_samples, columns=["_id", "library", "version_before", "version_after"]
-    ).to_csv(f"../benchmark/{lang}_record_samples.csv", index=False)
+    ).to_csv(f"../../benchmark/ground_truth{lang}_record_samples.csv", index=False)
 
 
 def check_annotated_data(lang: str, col):
-    df = pd.read_excel(f"../../benchmark/{lang}_record_samples.xlsx")
+    df = pd.read_excel(f"../../benchmark/ground_truth/{lang}_record_samples.xlsx")
     for row in df[df["index_before"].notna()].itertuples(index=False):
         objid = ObjectId(row[0])
         doc = col.find_one({"_id": objid})
@@ -168,7 +168,7 @@ def process_single_doc(
 
 
 def calculate_metric_values(lang: str):
-    df = pd.read_excel(f"../../benchmark/{lang}_record_samples.xlsx")
+    df = pd.read_excel(f"../../benchmark/ground_truth/{lang}_record_samples.xlsx")
     id_index_pairs = {}
     for row in df.itertuples(index=False):
         id_index_pairs.setdefault(row[0], [])
@@ -187,10 +187,10 @@ def calculate_metric_values(lang: str):
 
 
 if __name__ == "__main__":
-    sample_records("java")
-    sample_records("py")
+    sample("java")
+    sample("py")
 
-    if os.path.exists(f"../../benchmark/java_record_samples.xlsx"):
+    if os.path.exists(f"../../benchmark/ground_truth/java_record_samples.xlsx"):
         check_annotated_data("java", java_api_call_changes)
         data = calculate_metric_values("java")
         df = pd.DataFrame(
@@ -206,10 +206,10 @@ if __name__ == "__main__":
                 "label",
             ],
         )
-        df.to_csv("../../benchmark/java_ground_truth.csv", index=False)
+        df.to_csv("../../benchmark/ground_truth/java_ground_truth.csv", index=False)
         print(len(df), len(df[df["label"] == 1]))
 
-    if os.path.exists(f"../../benchmark/py_record_samples.xlsx"):
+    if os.path.exists(f"../../benchmark/ground_truth/py_record_samples.xlsx"):
         data = calculate_metric_values("py")
         df = pd.DataFrame(
             data,
@@ -223,5 +223,5 @@ if __name__ == "__main__":
                 "label",
             ],
         )
-        df.to_csv("../../benchmark/py_ground_truth.csv", index=False)
+        df.to_csv("../../benchmark/ground_truth/py_ground_truth.csv", index=False)
         print(len(df), len(df[df["label"] == 1]))
