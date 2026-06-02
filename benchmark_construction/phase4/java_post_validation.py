@@ -75,7 +75,7 @@ def deprecated_tag_in_doc(node: Node) -> bool:
     if prev_sibling.type != "block_comment":
         return False
 
-    return "@deprecated" in text_of(prev_sibling)
+    return "deprecat" in text_of(prev_sibling)
 
 
 def is_deprecated_java_node(node: None):
