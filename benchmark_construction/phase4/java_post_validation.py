@@ -204,8 +204,16 @@ def java_ast_dfs(
             else:
                 if receiver_type_deprecated is None:
                     receiver_type_deprecated = is_deprecated_java_node(child)
+                if child.type == "enum_declaration":
+                    body_node = None
+                    for body_child in child.child_by_field_name("body").named_children:
+                        if body_child.type == "enum_body_declarations":
+                            body_node = body_child
+                            break
+                else:
+                    body_node = child.child_by_field_name("body")
                 tmp_res = java_ast_dfs(
-                    child.child_by_field_name("body"),
+                    body_node,
                     api_seqs[1:],
                     source_jar,
                     filepath,
