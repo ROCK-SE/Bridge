@@ -20,8 +20,7 @@ logging.basicConfig(
 class ModuleInfo:
     name: str
     path: str
-    is_package: bool
-    defines: dict[str] = field(default_factory=dict)
+    defines: dict[str, dict] = field(default_factory=dict)
     imports: dict[str, str] = field(default_factory=dict)
     star_imports: list[str] = field(default_factory=list)
 
@@ -59,9 +58,11 @@ def handle_import_from_statement(node: Node, info: ModuleInfo):
     if level > 0:
         current_path_parts = info.path.split("/")
         if module_name:
-            module_name = ".".join(current_path_parts[:-level] + [module_name])
+            module_name = ".".join(current_path_parts[:-level] + [module_name]).replace(
+                " ", ""
+            )
         else:
-            module_name = ".".join(current_path_parts[:-level])
+            module_name = ".".join(current_path_parts[:-level]).replace(" ", "")
 
     for child in node.named_children[1:]:
         if child.type == "wildcard_import":
@@ -213,7 +214,7 @@ def handle_decorated_definition(node: Node, info: ModuleInfo):
     info.defines[name] = {"type": typ, "deprecation": deprecation}
 
 
-def extract_symbols_in_file(node: Node, info: ModuleInfo):
+def extract_symbols_in_node(node: Node, info: ModuleInfo):
     if node.type == "import_statement":
         handle_import_statement(node, info)
         return
@@ -243,7 +244,7 @@ def extract_symbols_in_file(node: Node, info: ModuleInfo):
         return
 
     for child in node.named_children:
-        extract_symbols_in_file(child, info)
+        extract_symbols_in_node(child, info)
 
 
 class APIResolver:
@@ -254,7 +255,7 @@ class APIResolver:
         self.zf = zipfile.ZipFile(wheel_path)
         self.module_to_path: dict[str, str] = {}
         # Cache the extracted symbols for a file/module in the wheel.
-        self.cache: dict[str, ModuleInfo] = {}
+        self.module_symbols_cache: dict[str, ModuleInfo] = {}
 
         self._index_modules()
 
@@ -276,3 +277,98 @@ class APIResolver:
                 module_name = ".".join(p.with_suffix("").parts)
 
             self.module_to_path[module_name] = path
+
+    def resolve(self, api_fqn: str):
+        parts = api_fqn.split(".")
+        module_name = self._longest_importable_module(parts)
+
+        if not module_name:
+            return None
+
+        rest_parts = parts[len(module_name.split(".")) :]
+        print(module_name, rest_parts)
+        return self.resolve_from_module(module_name, rest_parts)
+
+    def _longest_importable_module(self, parts: list[str]):
+        best = None
+        for i in range(len(parts)):
+            candidate = ".".join(parts[: i + 1])
+            if candidate in self.module_to_path:
+                best = candidate
+        return best
+
+    def resolve_from_module(self, module_name: str, attrs: list[str]):
+        # nothing to resolve from the module
+        if not attrs:
+            return None
+
+        # extract all symbols defined/imported in the module
+        module_info = self.extract_symbols_in_module(module_name)
+        if not module_info:
+            return None
+
+        # head is defined in the module
+        if attrs[0] in module_info.defines:
+            print(f"{module_info.path} defines {attrs}")
+            return self._resolve_definitions(module_info, attrs)
+
+        # head is imported from another module
+        if attrs[0] in module_info.imports:
+            target_module = module_info.imports[attrs[0]]
+            print(f"{module_info.path} imports {attrs} in from {target_module}")
+            target_fqn = ".".join([target_module] + attrs[1:])
+            return self.resolve(target_fqn)
+
+        # head maybe in one of the wildcard imports.
+        for star_module in module_info.star_imports:
+            target_fqn = ".".join([star_module] + attrs)
+            print(f"Trying wildcard import: {star_module=}, {target_fqn=}")
+            target_info = self.resolve(target_fqn)
+            if target_info:
+                return target_info
+
+    def _resolve_definitions(self, module_info: ModuleInfo, attrs: list[str]):
+        # we can only resolve at most 2 (symbols defined within in a class)
+        num_attrs = len(attrs)
+        if num_attrs > 2:
+            return None
+
+        definitions = module_info.defines
+        head = attrs[0]
+        if not head in definitions:
+            return None
+
+        head_info = definitions[head]
+        res = {
+            "fqn": f"{module_info.name}.{head}",
+            "filepath": module_info.path,
+            "deprecation": head_info["deprecation"],
+        }
+        if head_info["type"] in ["function", "variable"]:
+            # no symbols should be defined in a function
+            if num_attrs == 2:
+                return None
+            return res
+
+        elif head_info["type"] == "class":
+            if num_attrs == 1:
+                return res
+            # class method or inner class
+            else:
+                res["fqn"] = f"{module_info.name}.{head}.{attrs[1]}"
+                return res
+
+    def extract_symbols_in_module(self, module_name: str):
+        if module_name in self.module_symbols_cache:
+            return self.module_symbols_cache[module_name]
+
+        if module_name not in self.module_to_path:
+            return None
+
+        path = self.module_to_path[module_name]
+        src = self.zf.read(path)
+        tree = PY_PARSER.parse(src)
+        info = ModuleInfo(module_name, path)
+        extract_symbols_in_node(tree.root_node, info)
+        self.module_symbols_cache[module_name] = info
+        return info
