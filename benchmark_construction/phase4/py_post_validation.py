@@ -267,14 +267,20 @@ class APIResolver:
             if not path.endswith(".py"):
                 continue
 
-            if ".dist-info/" in path or ".data/" in path:
+            if ".dist-info/" in path:
                 continue
 
-            p = Path(path)
-            if p.name == "__init__.py":
-                module_name = ".".join(p.parts[:-1])
+            parts = Path(path).parts
+            if (
+                (len(parts) > 2)
+                and parts[0].endswith(".data")
+                and (parts[1] in ["purelib", "platlib"])
+            ):
+                parts = parts[2:]
+            if parts[-1] == "__init__.py":
+                module_name = ".".join(parts[:-1])
             else:
-                module_name = ".".join(p.with_suffix("").parts)
+                module_name = ".".join(parts)[:-3]
 
             self.module_to_path[module_name] = path
 
