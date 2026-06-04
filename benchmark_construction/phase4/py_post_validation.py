@@ -75,12 +75,21 @@ def deprecation_check(node: Node) -> bool:
     string_literals = []
     if node.type == "function_definition":
         string_literals = find_all_strings(node)
+        for match in py_call_query.matches(node):
+            name = match[1]["name"][0].text.decode(errors="ignore")
+            if "deprecat" in name:
+                return True
+
     elif node.type == "class_definition":
         body = node.child_by_field_name("body")
 
         for child in body.named_children:
+            if child.type == "decorated_definition":
+                child = child.child_by_field_name("definition")
+
             if child.type == "class_definition":
                 continue
+
             elif child.type == "function_definition":
                 func_name = child.child_by_field_name("name").text.decode(
                     errors="ignore"
@@ -88,17 +97,14 @@ def deprecation_check(node: Node) -> bool:
                 if func_name != "__init__":
                     continue
                 string_literals.extend(find_all_strings(child))
+
             else:
                 string_literals.extend(find_all_strings(child))
+
     for s in string_literals:
         if contains_deprecation_text(s):
             return True
 
-    # find all function calls
-    for match in py_call_query.matches(node):
-        name = match[1]["name"][0].text.decode(errors="ignore")
-        if "deprecat" in name:
-            return True
     return False
 
 
@@ -226,6 +232,25 @@ def extract_name_deprecation(node: Node):
     return name, deprecation
 
 
+def extract_superclasses(node: Node) -> list[str]:
+    sc_node = node.child_by_field_name("superclasses")
+    if sc_node is None:
+        return []
+
+    superclasses = []
+    for child in sc_node.named_children:
+        if child.type in ["identifier", "attribute"]:
+            superclasses.append(child.text.decode(errors="ignore"))
+    return superclasses
+
+
+def extract_class_information(node: Node):
+    name, deprecation = extract_name_deprecation(node)
+    superclasses = extract_superclasses(node)
+
+    return name, deprecation, superclasses
+
+
 def handle_function_definition(node: Node, info: ModuleInfo):
     if node.type != "function_definition":
         return
@@ -238,8 +263,12 @@ def handle_class_definition(node: Node, info: ModuleInfo):
     if node.type != "class_definition":
         return
 
-    class_name, class_deprecation = extract_name_deprecation(node)
-    info.defines[class_name] = {"type": "class", "deprecation": class_deprecation}
+    class_name, class_deprecation, class_sc = extract_class_information(node)
+    info.defines[class_name] = {
+        "type": "class",
+        "deprecation": class_deprecation,
+        "superclasses": class_sc,
+    }
 
     body_node = node.child_by_field_name("body")
     for child in body_node.named_children:
@@ -250,23 +279,33 @@ def handle_class_definition(node: Node, info: ModuleInfo):
                 "deprecation": class_deprecation or method_deprecation,
             }
         elif child.type == "class_definition":
-            inner_class_name, inner_class_deprecation = extract_name_deprecation(child)
+            (
+                inner_class_name,
+                inner_class_deprecation,
+                inner_sc,
+            ) = extract_class_information(child)
             info.defines[f"{class_name}.{inner_class_name}"] = {
                 "type": "inner class",
                 "deprecation": class_deprecation or inner_class_deprecation,
+                "superclasses": inner_sc,
             }
         elif child.type == "decorated_definition":
-            name, typ, deprecation = extract_decorator_definition_information(child)
+            dec_info = extract_decorator_definition_information(child)
+            name = dec_info["name"]
+            typ = dec_info["type"]
             t = "class method" if typ == "function" else "inner class"
-            info.defines[f"{class_name}.{name}"] = {
+            tmp = {
                 "type": t,
-                "deprecation": class_deprecation or deprecation,
+                "deprecation": class_deprecation or dec_info["deprecation"],
             }
+            if typ == "class":
+                tmp["superclasses"] = dec_info["superclasses"]
+            info.defines[f"{class_name}.{name}"] = tmp
 
 
 def extract_decorator_definition_information(node: Node):
     if node.type != "decorated_definition":
-        return
+        return {}
 
     deprecation_decorator = False
     for child in node.named_children:
@@ -280,19 +319,31 @@ def extract_decorator_definition_information(node: Node):
     if definition_node.type == "function_definition":
         typ = "function"
         name, deprecation = extract_name_deprecation(definition_node)
+        res = {
+            "name": name,
+            "type": typ,
+            "deprecation": deprecation or deprecation_decorator,
+        }
     elif definition_node.type == "class_definition":
         typ = "class"
-        name, deprecation = extract_name_deprecation(definition_node)
+        name, deprecation, superclasses = extract_class_information(definition_node)
+        res = {
+            "name": name,
+            "type": typ,
+            "deprecation": deprecation or deprecation_decorator,
+            "superclasses": superclasses,
+        }
 
-    return name, typ, deprecation or deprecation_decorator
+    return res
 
 
 def handle_decorated_definition(node: Node, info: ModuleInfo):
     if node.type != "decorated_definition":
         return
 
-    name, typ, deprecation = extract_decorator_definition_information(node)
-    info.defines[name] = {"type": typ, "deprecation": deprecation}
+    tmp = extract_decorator_definition_information(node)
+    name = tmp.pop("name")
+    info.defines[name] = tmp
 
 
 def extract_symbols_in_node(node: Node, info: ModuleInfo):
@@ -454,11 +505,18 @@ class APIResolver:
             # class method or inner class
             else:
                 symb_name = f"{head}.{attrs[1]}"
-                if symb_name not in definitions:
-                    return None
-                res["fqn"] = f"{module_info.name}.{symb_name}"
-                res["deprecation"] = definitions[symb_name]["deprecation"]
-                return res
+                # if the class method is defined in the class, return
+                if symb_name in definitions:
+                    res["fqn"] = f"{module_info.name}.{symb_name}"
+                    res["deprecation"] = definitions[symb_name]["deprecation"]
+                    return res
+
+                # otherwise, if the class has superclasses, find the method in its superclasses
+                for sc in head_info["superclasses"]:
+                    sc_fqn = f"{module_info.name}.{sc}.{attrs[1]}"
+                    res = self.resolve(sc_fqn)
+                    if res:
+                        return res
 
     def extract_symbols_in_module(self, module_name: str):
         if module_name in self.module_symbols_cache:
