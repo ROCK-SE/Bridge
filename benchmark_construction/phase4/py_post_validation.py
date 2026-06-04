@@ -54,9 +54,10 @@ def handle_import_from_statement(node: Node, info: ModuleInfo):
     while module_name and (module_name[0] == "."):
         level += 1
         module_name = module_name[1:]
-
     if level > 0:
         current_path_parts = info.path.split("/")
+        if current_path_parts[0].endswith(".data"):
+            current_path_parts = current_path_parts[2:]
         if module_name:
             module_name = ".".join(current_path_parts[:-level] + [module_name]).replace(
                 " ", ""
@@ -292,12 +293,12 @@ class APIResolver:
             return None
 
         rest_parts = parts[len(module_name.split(".")) :]
-        print(module_name, rest_parts)
+        # print(module_name, rest_parts)
         return self.resolve_from_module(module_name, rest_parts)
 
     def _longest_importable_module(self, parts: list[str]):
         best = None
-        for i in range(len(parts)):
+        for i in range(len(parts) - 1):
             candidate = ".".join(parts[: i + 1])
             if candidate in self.module_to_path:
                 best = candidate
@@ -315,20 +316,20 @@ class APIResolver:
 
         # head is defined in the module
         if attrs[0] in module_info.defines:
-            print(f"{module_info.path} defines {attrs}")
+            # print(f"{module_info.path} defines {attrs}")
             return self._resolve_definitions(module_info, attrs)
 
         # head is imported from another module
         if attrs[0] in module_info.imports:
             target_module = module_info.imports[attrs[0]]
-            print(f"{module_info.path} imports {attrs} in from {target_module}")
+            # print(f"{module_info.path} imports {attrs} in from {target_module}")
             target_fqn = ".".join([target_module] + attrs[1:])
             return self.resolve(target_fqn)
 
         # head maybe in one of the wildcard imports.
         for star_module in module_info.star_imports:
             target_fqn = ".".join([star_module] + attrs)
-            print(f"Trying wildcard import: {star_module=}, {target_fqn=}")
+            # print(f"Trying wildcard import: {star_module=}, {target_fqn=}")
             target_info = self.resolve(target_fqn)
             if target_info:
                 return target_info
