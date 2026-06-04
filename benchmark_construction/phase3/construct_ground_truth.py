@@ -83,7 +83,7 @@ def sample(lang: str):
     print(f"{lang}: {len(record_samples)} sampled records")
     pd.DataFrame(
         record_samples, columns=["_id", "library", "version_before", "version_after"]
-    ).to_csv(f"../../benchmark/ground_truth{lang}_record_samples.csv", index=False)
+    ).to_csv(f"../../benchmark/ground_truth/{lang}_record_samples.csv", index=False)
 
 
 def check_annotated_data(lang: str, col):
@@ -210,6 +210,7 @@ if __name__ == "__main__":
         print(len(df), len(df[df["label"] == 1]))
 
     if os.path.exists(f"../../benchmark/ground_truth/py_record_samples.xlsx"):
+        check_annotated_data("py", py_api_call_changes)
         data = calculate_metric_values("py")
         df = pd.DataFrame(
             data,

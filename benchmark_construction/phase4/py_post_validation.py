@@ -346,9 +346,30 @@ def handle_decorated_definition(node: Node, info: ModuleInfo):
     if node.type != "decorated_definition":
         return
 
-    tmp = extract_decorator_definition_information(node)
-    name = tmp.pop("name")
-    info.defines[name] = tmp
+    deprecation_decorator = False
+    for child in node.named_children:
+        if child.type == "decorator":
+            decorator = child.text.decode(errors="ignore")
+            if "deprecat" in decorator.lower():
+                deprecation_decorator = True
+                break
+
+    def_node = node.child_by_field_name("definition")
+    if def_node.type == "function_definition":
+        name = def_node.child_by_field_name("name").text.decode(errors="ignore")
+        handle_function_definition(def_node, info)
+        info.defines[name]["deprecation"] = (
+            info.defines[name]["deprecation"] or deprecation_decorator
+        )
+
+    elif def_node.type == "class_definition":
+        name = def_node.child_by_field_name("name").text.decode(errors="ignore")
+        handle_class_definition(def_node, info)
+        for n in info.defines:
+            if (n == name) or name.startswith(f"{n}."):
+                info.defines[n]["deprecation"] = (
+                    info.defines[n]["deprecation"] or deprecation_decorator
+                )
 
 
 def extract_symbols_in_node(node: Node, info: ModuleInfo):
