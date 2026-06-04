@@ -31,10 +31,11 @@ DEPRECATION_PATTERNS = [
     r"\bremoved\b",
     r"deprecation",
     r"\blegacy\b",
-    r"\buse .* instead\b",
+    r"\buse \b.* instead\b",
     r"\bmoved to\b",
     r"\brenamed\b",
 ]
+SENTENCE_SPLIT_RE = re.compile(r"[.!?]\s+")
 py_call_query = PY_LANGUAGE.query(
     """
 (call
@@ -43,10 +44,14 @@ py_call_query = PY_LANGUAGE.query(
 )
 
 
-def contains_deprecation_text(doc: str) -> bool:
-    return any(
-        re.search(p, doc, re.IGNORECASE | re.DOTALL) for p in DEPRECATION_PATTERNS
-    )
+def contains_deprecation_text(text: str) -> bool:
+    text = re.sub(r"\s+", " ", text).strip()
+    sentences = SENTENCE_SPLIT_RE.split(text)
+    for s in sentences:
+        for p in DEPRECATION_PATTERNS:
+            if re.search(p, s, re.IGNORECASE):
+                return True
+    return False
 
 
 def extract_string_content(node: Node) -> str:
