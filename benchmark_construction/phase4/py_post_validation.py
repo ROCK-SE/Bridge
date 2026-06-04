@@ -35,6 +35,12 @@ DEPRECATION_PATTERNS = [
     r"\bmoved to\b",
     r"\brenamed\b",
 ]
+py_call_query = PY_LANGUAGE.query(
+    """
+(call
+    function: (_) @name)
+"""
+)
 
 
 def contains_deprecation_text(doc: str) -> bool:
@@ -86,6 +92,12 @@ def deprecation_check(node: Node) -> bool:
                 string_literals.extend(find_all_strings(child))
     for s in string_literals:
         if contains_deprecation_text(s):
+            return True
+
+    # find all function calls
+    for match in py_call_query.matches(node):
+        name = match[1]["name"][0].text.decode(errors="ignore")
+        if "deprecat" in name:
             return True
     return False
 
@@ -144,24 +156,48 @@ def handle_import_from_statement(node: Node, info: ModuleInfo):
 
 def extract_assigned_names(node: Node):
     if node is None:
-        return set()
+        return []
 
     if node.type == "identifier":
-        return {node.text.decode(errors="ignore")}
+        return [node.text.decode(errors="ignore")]
 
     elif node.type in ["tuple_pattern", "list_pattern", "pattern_list"]:
-        res = set()
+        res = []
         for child in node.named_children:
-            res |= extract_assigned_names(child)
+            res.extend(extract_assigned_names(child))
         return res
 
-    return set()
+    return []
+
+
+def extract_value_type(node: Node):
+    if node.type is None:
+        return []
+
+    if node.type in ["identifier", "attribute"]:
+        return [node.text.decode(errors="ignore")]
+
+    if node.type == "call":
+        return extract_value_type(node.child_by_field_name("function"))
+
+    if node.type == "expression_list":
+        res = []
+        for child in node.named_children:
+            res.extend(extract_value_type(child))
+        return res
+    return []
 
 
 def handle_assignment_statement(node: Node, info: ModuleInfo):
     left_node = node.child_by_field_name("left")
-    for name in extract_assigned_names(left_node):
+    names = extract_assigned_names(left_node)
+    right_node = node.child_by_field_name("right")
+    value_types = extract_value_type(right_node)
+    for name in names:
         info.defines[name] = {"type": "variable", "deprecation": False}
+    if len(names) == len(value_types):
+        for n, s in zip(names, value_types):
+            info.defines[n].update({"target": s})
 
 
 def handle_delete_statement(node: Node, info: ModuleInfo):
@@ -395,9 +431,20 @@ class APIResolver:
             "filepath": module_info.path,
             "deprecation": head_info["deprecation"],
         }
-        if head_info["type"] in ["function", "variable"]:
+        if head_info["type"] == "function":
             # no symbols should be defined in a function
             if num_attrs == 2:
+                return None
+            return res
+
+        if head_info["type"] in ["function", "variable"]:
+            target = head_info.get("target")
+            if target:
+                fqn = f"{module_info.name}.{target}"
+                if num_attrs == 2:
+                    fqn = f"{fqn}.{attrs[1]}"
+                return self.resolve(fqn)
+            elif num_attrs == 2:
                 return None
             return res
 
