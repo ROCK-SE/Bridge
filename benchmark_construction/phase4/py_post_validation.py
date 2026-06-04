@@ -372,6 +372,33 @@ def handle_decorated_definition(node: Node, info: ModuleInfo):
                 )
 
 
+def module_deprecation_check(node: Node):
+    for child in node.named_children:
+        if child.type in ["import_statement", "import_from_statement", "comment"]:
+            continue
+        elif child.type == "expression_statement":
+            clds = child.named_children
+            if not clds:
+                return False
+            if len(clds) > 1:
+                return False
+            child = clds[0]
+            if child.type != "call":
+                return False
+            name = child.child_by_field_name("function").text.decode(errors="ignore")
+            if name not in ["warn", "warnings.warn"]:
+                return False
+
+            string_literals = find_all_strings(node)
+            for s in string_literals:
+                if contains_deprecation_text(s):
+                    return True
+            return False
+        else:
+            return False
+    return False
+
+
 def extract_symbols_in_node(node: Node, info: ModuleInfo):
     if node.type == "import_statement":
         handle_import_statement(node, info)
@@ -441,6 +468,23 @@ class APIResolver:
                 module_name = ".".join(parts)[:-3]
 
             self.module_to_path[module_name] = path
+
+    def check_module_deprecated(self, api_fqn: str):
+        parts = api_fqn.split(".")
+        module_name = self._longest_importable_module(parts)
+
+        if not module_name:
+            return False
+
+        symbols = self.module_symbols_cache.get(module_name)
+        if symbols:
+            if symbols.defines:
+                return False
+
+        path = self.module_to_path[module_name]
+        src = self.zf.read(path)
+        root_node = PY_PARSER.parse(src).root_node
+        return module_deprecation_check(root_node)
 
     def resolve(self, api_fqn: str):
         parts = api_fqn.split(".")
