@@ -406,7 +406,11 @@ class APIResolver:
                 return res
             # class method or inner class
             else:
-                res["fqn"] = f"{module_info.name}.{head}.{attrs[1]}"
+                symb_name = f"{head}.{attrs[1]}"
+                if symb_name not in definitions:
+                    return None
+                res["fqn"] = f"{module_info.name}.{symb_name}"
+                res["deprecation"] = definitions[symb_name]["deprecation"]
                 return res
 
     def extract_symbols_in_module(self, module_name: str):
