@@ -1,4 +1,5 @@
 import logging
+import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,6 +24,70 @@ class ModuleInfo:
     defines: dict[str, dict] = field(default_factory=dict)
     imports: dict[str, str] = field(default_factory=dict)
     star_imports: list[str] = field(default_factory=list)
+
+
+DEPRECATION_PATTERNS = [
+    r"\bdeprecated\b",
+    r"\bremoved\b",
+    r"deprecation",
+    r"\blegacy\b",
+    r"\buse .* instead\b",
+    r"\bmoved to\b",
+    r"\brenamed\b",
+]
+
+
+def contains_deprecation_text(doc: str) -> bool:
+    return any(
+        re.search(p, doc, re.IGNORECASE | re.DOTALL) for p in DEPRECATION_PATTERNS
+    )
+
+
+def extract_string_content(node: Node) -> str:
+    if node.type != "string":
+        return ""
+    res = ""
+    for child in node.named_children[1:-1]:
+        res += child.text.decode(errors="ignore")
+    return res
+
+
+def find_all_strings(node: Node) -> list[str]:
+    res = []
+    if node.type == "string":
+        res.append(extract_string_content(node))
+    elif node.type == "concatenated_string":
+        tmp = "".join([extract_string_content(child) for child in node.named_children])
+        res.append(tmp)
+    else:
+        for child in node.named_children:
+            res.extend(find_all_strings(child))
+    return res
+
+
+def deprecation_check(node: Node) -> bool:
+    string_literals = []
+    if node.type == "function_definition":
+        string_literals = find_all_strings(node)
+    elif node.type == "class_definition":
+        body = node.child_by_field_name("body")
+
+        for child in body.named_children:
+            if child.type == "class_definition":
+                continue
+            elif child.type == "function_definition":
+                func_name = child.child_by_field_name("name").text.decode(
+                    errors="ignore"
+                )
+                if func_name != "__init__":
+                    continue
+                string_literals.extend(find_all_strings(child))
+            else:
+                string_literals.extend(find_all_strings(child))
+    for s in string_literals:
+        if contains_deprecation_text(s):
+            return True
+    return False
 
 
 def handle_import_statement(node: Node, info: ModuleInfo):
@@ -118,12 +183,9 @@ def handle_delete_statement(node: Node, info: ModuleInfo):
                 info.imports.pop(d, None)
 
 
-def extract_function_info(node: Node):
+def extract_name_deprecation(node: Node):
     name = node.child_by_field_name("name").text.decode(errors="ignore")
-    body = node.child_by_field_name("body").text.decode(errors="ignore")
-    deprecation = False
-    if "deprecat" in body.lower():
-        deprecation = True
+    deprecation = deprecation_check(node)
 
     return name, deprecation
 
@@ -132,45 +194,27 @@ def handle_function_definition(node: Node, info: ModuleInfo):
     if node.type != "function_definition":
         return
 
-    name, deprecation = extract_function_info(node)
+    name, deprecation = extract_name_deprecation(node)
     info.defines[name] = {"type": "function", "deprecation": deprecation}
-
-
-def extract_class_info(node: Node):
-    name = node.child_by_field_name("name").text.decode(errors="ignore")
-    body_node = node.child_by_field_name("body")
-    deprecation = False
-    if not body_node.named_children:
-        return name, deprecation
-    body_children = body_node.named_children[0]
-    if not body_children.named_children:
-        return name, deprecation
-    first_body_child = body_children.named_children[0]
-    if first_body_child.type == "string":
-        docstring = first_body_child.text.decode(errors="ignore")
-        if "deprecat" in docstring.lower():
-            deprecation = True
-
-    return name, deprecation
 
 
 def handle_class_definition(node: Node, info: ModuleInfo):
     if node.type != "class_definition":
         return
 
-    class_name, class_deprecation = extract_class_info(node)
+    class_name, class_deprecation = extract_name_deprecation(node)
     info.defines[class_name] = {"type": "class", "deprecation": class_deprecation}
 
     body_node = node.child_by_field_name("body")
     for child in body_node.named_children:
         if child.type == "function_definition":
-            method_name, method_deprecation = extract_function_info(child)
+            method_name, method_deprecation = extract_name_deprecation(child)
             info.defines[f"{class_name}.{method_name}"] = {
                 "type": "class method",
                 "deprecation": class_deprecation or method_deprecation,
             }
         elif child.type == "class_definition":
-            inner_class_name, inner_class_deprecation = extract_class_info(child)
+            inner_class_name, inner_class_deprecation = extract_name_deprecation(child)
             info.defines[f"{class_name}.{inner_class_name}"] = {
                 "type": "inner class",
                 "deprecation": class_deprecation or inner_class_deprecation,
@@ -199,10 +243,10 @@ def extract_decorator_definition_information(node: Node):
     definition_node = node.child_by_field_name("definition")
     if definition_node.type == "function_definition":
         typ = "function"
-        name, deprecation = extract_function_info(definition_node)
+        name, deprecation = extract_name_deprecation(definition_node)
     elif definition_node.type == "class_definition":
         typ = "class"
-        name, deprecation = extract_class_info(definition_node)
+        name, deprecation = extract_name_deprecation(definition_node)
 
     return name, typ, deprecation or deprecation_decorator
 
