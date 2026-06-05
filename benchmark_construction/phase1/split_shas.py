@@ -1,5 +1,3 @@
-import argparse
-
 import pandas as pd
 
 config_files = [
