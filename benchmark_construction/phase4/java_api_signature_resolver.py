@@ -12,23 +12,17 @@ from urllib.request import urlretrieve
 import pandas as pd
 import tree_sitter_java as tsjava
 import tree_sitter_scala as tsscala
-from benchmark_construction.phase3_update_instance_identification.build_import_mappings import (
-    construct_file_tree,
-)
 from joblib import Parallel, delayed
-from benchmark_construction.phase2_api_call_analysis.parse_api_calls import (
-    parse_imports_java,
-)
 from pymongo import MongoClient
 from tqdm.auto import tqdm
 from tree_sitter import Language, Node, Parser
-from utils import insert_many_skip_large
+from utils import construct_file_tree, insert_many_skip_large, parse_imports_java
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-debug_fh = logging.FileHandler("../log/java_api_update_validator.debug", mode="w")
+debug_fh = logging.FileHandler("../../log/java_api_signature_resolver.debug", mode="w")
 debug_fh.setLevel(logging.DEBUG)
-info_fh = logging.FileHandler("../log/java_api_update_validator.info", mode="w")
+info_fh = logging.FileHandler("../../log/java_api_signature_resolver.info", mode="w")
 info_fh.setLevel(logging.INFO)
 # create formatter and add it to the handlers
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(lineno)d %(message)s")
@@ -48,8 +42,8 @@ JAVA_PARSER = Parser(JAVA_LANGUAGE)
 SCALA_PARSER = Parser(SCALA_LANGUAGE)
 
 
-def gen_sources_jar_path(package: str, version: str, dest_folder: str):
-    group_id, artifact_id = package.split(":")
+def gen_sources_jar_path(library: str, version: str, dest_folder: str):
+    group_id, artifact_id = library.split(":")
     group_path = "/".join(group_id.split("."))
     jar_name = f"{artifact_id}-{version}-sources.jar"
     url = (
@@ -61,63 +55,63 @@ def gen_sources_jar_path(package: str, version: str, dest_folder: str):
 
 
 def download_sources_jar(row, dest_folder: str):
-    package = row["package"]
+    library = row["library"]
     version = row["version"]
-    url, save_path = gen_sources_jar_path(package, version, dest_folder)
+    url, save_path = gen_sources_jar_path(library, version, dest_folder)
     if os.path.exists(save_path):
-        logger.info(f"Sources Jar Already Downloaded: {package} {version}")
+        logger.info(f"Sources Jar Already Downloaded: {library} {version}")
         try:
             zipfile.ZipFile(save_path)
             return
         except:
-            logger.error(f"Bad Sources Jar: {package} {version}")
+            logger.error(f"Bad Sources Jar: {library} {version}")
             pass
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     try:
         urlretrieve(url, save_path)
-        logger.info(f"Successfully download jar for {package} {version}")
+        logger.info(f"Successfully download jar for {library} {version}")
     except HTTPError as e:
         if e.code == 404:
-            logger.error(f"Jar does not exist: {package} {version}")
+            logger.error(f"Jar does not exist: {library} {version}")
         else:
-            logger.error(f"Other HTTPError: {package} {version}")
+            logger.error(f"Other HTTPError: {library} {version}")
     except Exception as e:
-        logger.error(f"Downloading Error for {package} {version}: {e}")
+        logger.error(f"Downloading Error for {library} {version}: {e}")
 
     time.sleep(random.random() * 3)
 
 
-def download_java_packages(dest_folder: str, n_jobs: int = 1):
+def download_java_librarys(dest_folder: str, n_jobs: int = 1):
     data = pd.DataFrame(
         col.find(
             {},
             projection={
                 "_id": 0,
-                "package": 1,
+                "library": 1,
                 "version_before": 1,
                 "version_after": 1,
             },
         )
     )
-    package_releases = pd.concat(
+    library_releases = pd.concat(
         [
-            data[["package", "version_before"]].rename(
+            data[["library", "version_before"]].rename(
                 columns={"version_before": "version"}
             ),
-            data[["package", "version_after"]].rename(
+            data[["library", "version_after"]].rename(
                 columns={"version_after": "version"}
             ),
         ],
         ignore_index=True,
     )
-    package_releases.drop_duplicates(inplace=True)
-    package_releases = package_releases.to_dict("records")
-    print(f"{len(package_releases)} unique Maven library verisons")
+    library_releases.drop_duplicates(inplace=True)
+    library_releases = library_releases.to_dict("records")
+    print(f"{len(library_releases)} unique Maven library verisons")
 
     Parallel(n_jobs=n_jobs, backend="multiprocessing")(
         delayed(download_sources_jar)(row, dest_folder)
-        for row in tqdm(package_releases, file=sys.stdout)
+        for row in tqdm(library_releases, file=sys.stdout)
     )
 
 
@@ -752,16 +746,16 @@ def remove_same_call(api_update_pairs: list[dict]):
 
 
 def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
-    package = doc["package"]
+    library = doc["library"]
     version_before = doc["version_before"]
     version_after = doc["version_after"]
-    _, old_sources_jar_path = gen_sources_jar_path(package, version_before, dest_folder)
-    _, new_sources_jar_path = gen_sources_jar_path(package, version_after, dest_folder)
+    _, old_sources_jar_path = gen_sources_jar_path(library, version_before, dest_folder)
+    _, new_sources_jar_path = gen_sources_jar_path(library, version_after, dest_folder)
     if not os.path.exists(old_sources_jar_path):
-        logger.error(f"Sources Jar Not Found: {package} {version_before}")
+        logger.error(f"Sources Jar Not Found: {library} {version_before}")
         return
     if not os.path.exists(new_sources_jar_path):
-        logger.error(f"Sources Jar Not Found: {package} {version_after}")
+        logger.error(f"Sources Jar Not Found: {library} {version_after}")
         return
 
     update_pairs_with_method_body = []
@@ -771,12 +765,12 @@ def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
         for pair in doc["api_update_pairs"]:
             old_callee = pair["old_callee"]
             old_api_name = old_callee["full_name"]
-            logger.info(f"Checking {package} {version_before} {old_api_name} ...")
+            logger.info(f"Checking {library} {version_before} {old_api_name} ...")
             try:
                 old_apis = extract_apis(old_sources_jar, old_api_name)
             except:
                 logger.error(
-                    f"RecursionError: {package} {version_before} {old_api_name}"
+                    f"RecursionError: {library} {version_before} {old_api_name}"
                 )
                 continue
             old_matches_api = None
@@ -797,12 +791,12 @@ def extract_method_body_per_doc(doc: dict, dest_folder: str) -> dict | None:
 
             new_callee = pair["new_callee"]
             new_api_name = new_callee["full_name"]
-            logger.info(f"Checking {package} {version_after} {new_api_name} ...")
+            logger.info(f"Checking {library} {version_after} {new_api_name} ...")
             try:
                 new_apis = extract_apis(new_sources_jar, new_api_name)
             except:
                 logger.error(
-                    f"RecursionError: {package} {version_after} {new_api_name}"
+                    f"RecursionError: {library} {version_after} {new_api_name}"
                 )
                 continue
 
@@ -839,7 +833,7 @@ def extract(dest_folder: str, n_jobs: int = 1, batch_size: int = 100):
     docs = [
         doc
         for doc in col.find({}, projection={"_id": 0})
-        if not doc["package"].startswith(
+        if not doc["library"].startswith(
             ("com.azure", "com.alibaba.fastjson2", "com.alibaba:fastjson")
         )
     ]
@@ -855,12 +849,12 @@ def extract(dest_folder: str, n_jobs: int = 1, batch_size: int = 100):
     save_col = db[save_col_name]
     insert_many_skip_large(save_col, res)
     save_col.create_index("commit")
-    save_col.create_index("package")
+    save_col.create_index("library")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="python java_api_update_validator.py",
+        prog="python java_api_signature_resolver.py",
         description="Validate candidate Java library API update instances",
     )
     parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
@@ -871,7 +865,7 @@ if __name__ == "__main__":
         "-c",
         "--check",
         action="store_true",
-        help="check whether apis in each update instance exist in corresponding package release",
+        help="check whether apis in each update instance exist in corresponding library release",
     )
     parser.add_argument(
         "--dest_folder",
@@ -883,7 +877,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.download:
-        download_java_packages(args.dest_folder, args.n_jobs)
+        download_java_librarys(args.dest_folder, args.n_jobs)
 
     if args.check:
         extract(args.dest_folder, args.n_jobs)

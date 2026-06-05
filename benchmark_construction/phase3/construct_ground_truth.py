@@ -3,13 +3,12 @@ import os
 
 import pandas as pd
 from bson import ObjectId
-from pymongo import MongoClient
-from tqdm import tqdm
-
-from ..phase3.identify_update_instances import (
+from identify_update_instances import (
     java_similarity_metrics,
     python_similarity_metrics,
 )
+from pymongo import MongoClient
+from tqdm import tqdm
 
 client = MongoClient("127.0.0.1", 27017)
 db = client["bridge"]
