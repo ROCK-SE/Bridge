@@ -226,15 +226,21 @@ if __name__ == "__main__":
         prog="python build_import_mappings.py",
         description="Download wheel/jar file of the latest release for each updated Python library / Java library and build import mappings",
     )
-    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
+    parser.add_argument(
+        "-n", "--n_jobs", type=int, default=1, help="number of workers. DEFAULT: 1"
+    )
     parser.add_argument("-d", "--dest_folder", required=True, type=str)
     parser.add_argument(
-        "--python", action="store_true", help="download Python library wheels"
+        "--python",
+        action="store_true",
+        help="download Python library wheels. DEFAULT: False",
     )
     parser.add_argument(
-        "--java", action="store_true", help="download Java library jars"
+        "--java", action="store_true", help="download Java library jars. DEFAULT: False"
     )
-    parser.add_argument("--extract", action="store_true", help="extract import names")
+    parser.add_argument(
+        "--extract", action="store_true", help="extract import names. DEFAULT: False"
+    )
 
     args = parser.parse_args()
     if args.python:

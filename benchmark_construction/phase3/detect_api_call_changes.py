@@ -282,7 +282,7 @@ if __name__ == "__main__":
         description="Detect API call discrepancies within the same caller between the new and old blobs.",
     )
     parser.add_argument(
-        "-n", "--n_jobs", type=int, default=1, help="the number of workers"
+        "-n", "--n_jobs", type=int, default=1, help="the number of workers. DEFAULT: 1"
     )
 
     args = parser.parse_args()

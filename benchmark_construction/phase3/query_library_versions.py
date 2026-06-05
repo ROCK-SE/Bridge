@@ -219,13 +219,15 @@ if __name__ == "__main__":
         prog="python query_library_versions.py",
         description="Query Deps.dev API and PyPI API to obtain all versions of updated Java/Python libraries",
     )
-    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
+    parser.add_argument(
+        "-n", "--n_jobs", type=int, default=1, help="number of workers. DEFAULT: 1"
+    )
     parser.add_argument(
         "-b",
         "--batch_size",
         type=int,
         default=100,
-        help="number of libraries to be processed",
+        help="number of libraries to be processed. DEFAULT: 100",
     )
 
     args = parser.parse_args()
