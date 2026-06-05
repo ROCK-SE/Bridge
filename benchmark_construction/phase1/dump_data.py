@@ -109,25 +109,25 @@ if __name__ == "__main__":
         "-c",
         "--candidate",
         action="store_true",
-        help="dump candidate update commits to java/py_candidate_update_commits collection",
+        help="dump candidate update commits to java/py_candidate_update_commits collection. DEFAULT: False",
     )
     parser.add_argument(
         "-b",
         "--bumping",
         action="store_true",
-        help="dump version bumping commits to java/py_version_bumping_commits collection",
+        help="dump version bumping commits to java/py_version_bumping_commits collection. DEFAULT: False",
     )
     parser.add_argument(
         "-n",
         "--nonfixed",
         action="store_true",
-        help="dump nonfixed version bumping commits to java/py_nonfixed_version_bumping_commits collection",
+        help="dump nonfixed version bumping commits to java/py_nonfixed_version_bumping_commits collection. DEFAULT: False",
     )
     parser.add_argument(
         "-u",
         "--update",
         action="store_true",
-        help="dump update commits to java/py_update_commits collection",
+        help="dump update commits to java/py_update_commits collection. DEFAULT: False",
     )
     args = parser.parse_args()
 

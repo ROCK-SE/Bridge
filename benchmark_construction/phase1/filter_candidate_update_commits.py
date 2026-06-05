@@ -126,25 +126,30 @@ if __name__ == "__main__":
         "-f",
         "--target_files",
         type=str,
-        help="a list of filname separated by ,",
+        help="a list of filname separated by `,`",
     )
     parser.add_argument(
         "-s",
         "--server",
         default="da7",
         type=str,
-        help="the server that stores the c2fbb mapping files",
+        help="the server that stores the c2fbb mapping files. DEFAULT: da7",
     )
     parser.add_argument(
         "-v",
         "--ver",
         default="V3",
         type=str,
-        help="the version of c2fbb mappings",
+        help="the version of c2fbb mappings. DEFAULT: V3",
     )
-    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
     parser.add_argument(
-        "-u", "--update", action="store_true", help="requery if specified"
+        "-n", "--n_jobs", type=int, default=1, help="number of workers. DEFAULT: 1"
+    )
+    parser.add_argument(
+        "-u",
+        "--update",
+        action="store_true",
+        help="requery if specified. DEFAULT: False",
     )
 
     args = parser.parse_args()

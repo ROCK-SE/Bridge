@@ -253,14 +253,18 @@ if __name__ == "__main__":
         prog="python identify_version_bumping_commits.py",
         description="Obtain commits that update dependencies in the dependency configuration file",
     )
-    parser.add_argument("-f", "--target_files", help="a list of filname separated by ,")
+    parser.add_argument(
+        "-f", "--target_files", help="a list of filname separated by `,`"
+    )
     parser.add_argument(
         "-o",
         "--other_constraint",
         action="store_true",
-        help="consider other version constraints, not fixed version constraint by default",
+        help="consider other version constraints. DEFAULT: False, i.e., fixed version constraint",
     )
-    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
+    parser.add_argument(
+        "-n", "--n_jobs", type=int, default=1, help="number of workers. DEFAULT: 1"
+    )
 
     args = parser.parse_args()
     pandarallel.initialize(nb_workers=args.n_jobs, progress_bar=True)

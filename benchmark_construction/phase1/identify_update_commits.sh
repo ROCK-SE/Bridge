@@ -4,7 +4,7 @@ python split_shas.py
 # Get the modified files, new blobs, and old blobs for each commit
 # Ensure the modified files have java or py extensions, \(.java;\|.py;\)
 # New blob and old blob exists (some file modifications are file addition or deletion): [0-9a-f]\{40\};[0-9a-f]\{40\}
-cd ../../benchmark/Phase1
+cd ../../benchmark/phase1
 for f in setup.cfg pyproject.toml setup.py requirements.txt; do
     for s in {0..15}; do
         for j in {0..7}; do

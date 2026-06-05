@@ -103,14 +103,18 @@ if __name__ == "__main__":
         prog="python parse_dependencies.py",
         description="Parse configuration blobs to extract dependencies",
     )
-    parser.add_argument("-f", "--target_files", help="a list of filname separated by ,")
-    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
+    parser.add_argument(
+        "-f", "--target_files", help="a list of filname separated by `,`"
+    )
+    parser.add_argument(
+        "-n", "--n_jobs", type=int, default=1, help="number of workers. DEFAULT: 1"
+    )
     parser.add_argument(
         "-b",
         "--batch_size",
         type=int,
         default=1,
-        help="number of blobs for each thread to process per batch",
+        help="number of blobs for each thread to process per batch. DEFAULT: 1",
     )
 
     args = parser.parse_args()
