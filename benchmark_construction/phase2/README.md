@@ -1,24 +1,24 @@
 # Phase 2: API Call Analysis
-This phase analyzes API calls in extracted code blobs obtained in the last phase. The data files obtained in this phase are stored in the [benchmark/Phase2](../../benchmark/Phase2) folder. Please refer to [README.md in the `benchmark/Phase2` folder](../../benchmark/Phase2/README.md) for the statistics of result files.
+This phase analyzes API calls in extracted code blobs obtained in the last phase. The data files obtained in this phase are stored in the [benchmark/phase2](../../benchmark/phase2) folder. Please refer to [README.md in the `benchmark/phase2` folder](../../benchmark/phase2/README.md) for the statistics of result files.
 
 ## Extract Blob locations
 First run `python list_blobs.py` to split unique blobs into 128 files based on their sha-1 value. Then run `bash get_blob_idx.sh` to extract the offset and length of each blob in corresponding bin files. The results are stored in `java/py_blob.idx` files. Each row has fields: `blob`, `offset`, `length`.
 
 ## Parse API Calls
-`parse_api_calls.py` parses API calls in Java/Python code blobs and store them to MongoDB collections. For Java, we deal with object type resolution and caller extraction. For Python, we deal with alias resolution and caller extraction. It has the following command line options:
+[`parse_api_calls.py`](./parse_api_calls.py) parses API calls in Java/Python code blobs and store them to MongoDB collections. For Java, we deal with object type resolution and caller extraction. For Python, we deal with alias resolution and caller extraction. It has the following command line options:
 ```
 usage: python parse_api_calls.py [-h] [-n N_JOBS] [-b BATCH_SIZE] [--python] [--java]
 
-Parse api calls in Java/Python files and store them in MongoDB collections
+Parse API calls in Java/Python files and store them in MongoDB collections
 
 options:
   -h, --help            show this help message and exit
   -n N_JOBS, --n_jobs N_JOBS
-                        number of workers
+                        number of workers. DEFAULT: 1
   -b BATCH_SIZE, --batch_size BATCH_SIZE
-                        number of blobs to processed in a batch
-  --python              Parse Python files
-  --java                Parse Java files
+                        number of blobs to processed in a batch. DEFAULT: 1
+  --python              Parse Python files. DEFAULT: False
+  --java                Parse Java files. DEFAULT: False
 ```
 Run the following command to parse API calls for all Java/Python blobs obtained in above steps.
 ```shell

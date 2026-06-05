@@ -523,16 +523,22 @@ if __name__ == "__main__":
         prog="python parse_api_calls.py",
         description="Parse API calls in Java/Python files and store them in MongoDB collections",
     )
-    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
+    parser.add_argument(
+        "-n", "--n_jobs", type=int, default=1, help="number of workers. DEFAULT: 1"
+    )
     parser.add_argument(
         "-b",
         "--batch_size",
         type=int,
         default=1,
-        help="number of blobs to processed in a batch",
+        help="number of blobs to processed in a batch. DEFAULT: 1",
     )
-    parser.add_argument("--python", action="store_true", help="Parse Python files")
-    parser.add_argument("--java", action="store_true", help="Parse Java files")
+    parser.add_argument(
+        "--python", action="store_true", help="Parse Python files. DEFAULT: False"
+    )
+    parser.add_argument(
+        "--java", action="store_true", help="Parse Java files. DEFAULT: False"
+    )
 
     args = parser.parse_args()
     if args.python:
