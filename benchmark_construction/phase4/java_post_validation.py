@@ -9,9 +9,9 @@ from utils import construct_file_tree, gen_sources_jar_path, parse_imports_java
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-debug_fh = logging.FileHandler("../../log/java_api_signature_resolver.debug", mode="w")
+debug_fh = logging.FileHandler("../../log/java_post_validation.debug", mode="w")
 debug_fh.setLevel(logging.DEBUG)
-info_fh = logging.FileHandler("../../log/java_api_signature_resolver.info", mode="w")
+info_fh = logging.FileHandler("../../log/java_post_validation.info", mode="w")
 info_fh.setLevel(logging.INFO)
 # create formatter and add it to the handlers
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(lineno)d %(message)s")
@@ -20,6 +20,7 @@ info_fh.setFormatter(formatter)
 # add the handlers to logger
 logger.addHandler(debug_fh)
 logger.addHandler(info_fh)
+logger.propagate = False
 
 JAVA_LANGUAGE = Language(tsjava.language())
 SCALA_LANGUAGE = Language(tsscala.language())
