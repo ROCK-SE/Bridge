@@ -15,6 +15,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d %(message)s",
     level=logging.INFO,
 )
+logger.propagate = False
 
 
 @dataclass
@@ -182,6 +183,8 @@ def extract_assigned_names(node: Node):
 
 
 def extract_value_type(node: Node):
+    if node is None:
+        return []
     if node.type is None:
         return []
 
@@ -441,7 +444,7 @@ class APIResolver:
         self.module_to_path: dict[str, str] = {}
         # Cache the extracted symbols for a file/module in the wheel.
         self.module_symbols_cache: dict[str, ModuleInfo] = {}
-
+        self.seen = set()
         self._index_modules()
 
     def close(self):
@@ -469,6 +472,17 @@ class APIResolver:
 
             self.module_to_path[module_name] = path
 
+    def check_existence(self, api_fqn: str):
+        self.seen = set()
+        try:
+            api_sig = self.resolve(api_fqn)
+            if api_sig:
+                module_deprecation = self.check_module_deprecated(api_fqn)
+                api_sig["deprecation"] = api_sig["deprecation"] or module_deprecation
+            return api_sig
+        except RecursionError as e:
+            return
+
     def check_module_deprecated(self, api_fqn: str):
         parts = api_fqn.split(".")
         module_name = self._longest_importable_module(parts)
@@ -487,6 +501,9 @@ class APIResolver:
         return module_deprecation_check(root_node)
 
     def resolve(self, api_fqn: str):
+        if api_fqn in self.seen:
+            return
+        self.seen.add(api_fqn)
         parts = api_fqn.split(".")
         module_name = self._longest_importable_module(parts)
 
@@ -561,7 +578,10 @@ class APIResolver:
         if head_info["type"] in ["function", "variable"]:
             target = head_info.get("target")
             if target:
-                fqn = f"{module_info.name}.{target}"
+                if target in module_info.imports:
+                    fqn = module_info.imports[target]
+                else:
+                    fqn = f"{module_info.name}.{target}"
                 if num_attrs == 2:
                     fqn = f"{fqn}.{attrs[1]}"
                 return self.resolve(fqn)
