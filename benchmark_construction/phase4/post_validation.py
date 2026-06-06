@@ -197,11 +197,10 @@ def main(lang: str, n_jobs: int = 1):
             col.find({}, projection={"_id": 0}), total=col.estimated_document_count()
         )
     )
-    update_instance_col = db[f"{lang}_candidate_update_instances"]
-    update_instance_col.drop()
-    insert_many_skip_large(update_instance_col, res)
-    update_instance_col.create_index("commit")
-    update_instance_col.create_index("library")
+    col.drop()
+    insert_many_skip_large(col, res)
+    col.create_index("commit")
+    col.create_index("library")
 
 
 if __name__ == "__main__":
