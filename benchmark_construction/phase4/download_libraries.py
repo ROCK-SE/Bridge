@@ -13,23 +13,94 @@ import pandas as pd
 import requests
 from joblib import Parallel, delayed
 from packaging.utils import canonicalize_name
+from pymongo import MongoClient
 from tqdm import tqdm
+from utils import gen_sources_jar_path
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-info_fh = logging.FileHandler("../../log/download_wheels.log", mode="a")
-info_fh.setLevel(logging.INFO)
-# create formatter and add it to the handlers
-formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(lineno)d %(message)s")
-info_fh.setFormatter(formatter)
-# add the handlers to logger
-logger.addHandler(info_fh)
+
 
 RELEASE_JSON_API_ENDPOINT = "https://pypi.org/pypi/{name}/{version}/json"
 JSON_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
     "Accept": "application/json",
 }
+
+
+def download_sources_jar(row, dest_folder: str):
+    library = row["name"]
+    version = row["version"]
+    url, save_path = gen_sources_jar_path(library, version, dest_folder)
+    if os.path.exists(save_path):
+        logger.error(f"[INFO] Sources Jar Already Downloaded: {library} {version}")
+        try:
+            zipfile.ZipFile(save_path)
+            return
+        except:
+            logger.error(f"[ERROR] Bad Sources Jar: {library} {version}")
+            pass
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    try:
+        urlretrieve(url, save_path)
+        logger.error(f"[INFO] Successfully download jar for {library} {version}")
+    except HTTPError as e:
+        if e.code == 404:
+            logger.error(f"[ERROR] Jar does not exist: {library} {version} ")
+        else:
+            logger.error(f"[ERROR] Other HTTPError: {library} {version} {e}")
+    except Exception as e:
+        logger.error(f"[ERROR] Downloading Error for {library} {version}: {e}")
+
+    time.sleep(random.random() * 3)
+
+
+def releases_from_excel(lang: str):
+    releases = []
+    df = pd.read_excel(f"../../benchmark/ground_truth/{lang}_record_samples.xlsx")
+    for row in df.itertuples(index=False):
+        name = row.library
+        version_before = row.version_before
+        version_after = row.version_after
+        releases.append([name, version_before])
+        releases.append([name, version_after])
+    return releases
+
+
+def releases_from_mongo(lang: str):
+    releases = []
+    client = MongoClient("127.0.0.1", 27017)
+    db = client["bridge"]
+    col = db[f"{lang}_candidate_update_instances"]
+    for doc in tqdm(
+        col.find({}), total=col.estimated_document_count(), file=sys.stdout
+    ):
+        library = doc["library"]
+        version_before = doc["version_before"]
+        version_after = doc["version_after"]
+        releases.append([library, version_before])
+        releases.append([library, version_after])
+    return releases
+
+
+def download_jars(mode: str, n_jobs: int, dest_folder: str):
+    releases = []
+    if mode == "evaluation":
+        releases = releases_from_excel("java")
+
+    elif mode == "validation":
+        releases = releases_from_mongo("java")
+
+    releases = (
+        pd.DataFrame(releases, columns=["name", "version"])
+        .drop_duplicates()
+        .to_dict("records")
+    )
+    print(f"{len(releases)} releases")
+    Parallel(n_jobs=n_jobs)(
+        delayed(download_sources_jar)(rls, dest_folder)
+        for rls in tqdm(releases, file=sys.stdout)
+    )
 
 
 def download_wheel(record: dict, dest_folder: str):
@@ -40,24 +111,25 @@ def download_wheel(record: dict, dest_folder: str):
     save_path = os.path.join(dest_folder, "python", name, filename)
 
     if os.path.exists(save_path):
-        logger.info(f"Wheel Already Downloaded: {name}, {version}")
+        logger.error(f"[INFO] Wheel Already Downloaded: {name}, {version}")
         try:
             zipfile.ZipFile(save_path)
             return
         except:
-            logger.error(f"Bad Wheel: {name}, {version}, {filename}")
+            logger.error(f"[ERROR] Bad Wheel: {name}, {version}, {filename}")
 
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     try:
         urlretrieve(url, save_path)
+        logger.error(f"[INFO] Successfully download wheel for {name} {version}")
     except HTTPError as e:
         if e.code == 404:
-            logger.error(f"Wheel Not Found: {name}, {version}, {url}")
+            logger.error(f"[ERROR] Wheel Not Found: {name}, {version}, {url}")
         else:
-            logger.error(f"Other HTTPError: {name}, {version}, {url}")
+            logger.error(f"[ERROR] Other HTTPError: {name}, {version}, {url}")
     except Exception as e:
-        logger.error(f"Download Error: {name}, {version}, {url}, {e}")
+        logger.error(f"[ERROR] Download Error: {name}, {version}, {url}, {e}")
 
     time.sleep(random.random() * 3)
 
@@ -92,16 +164,10 @@ def my_get(
 def prepare_releases(mode: str):
     releases = []
     if mode == "evaluation":
-        df = pd.read_excel("../../benchmark/ground_truth/py_record_samples.xlsx")
-        for row in df.itertuples(index=False):
-            name = row.library
-            version_before = row.version_before
-            version_after = row.version_after
-            releases.append([name, version_before])
-            releases.append([name, version_after])
+        releases = releases_from_excel("py")
 
     elif mode == "validation":
-        pass
+        releases = releases_from_mongo("py")
 
     releases = pd.DataFrame(releases, columns=["name", "version"]).drop_duplicates()
     releases.to_csv(f"../../benchmark/phase4/py_releases_{mode}.csv", index=False)
@@ -116,11 +182,11 @@ def release_wheel_url(name: str, version: str, s: requests.Session) -> str | Non
     url = RELEASE_JSON_API_ENDPOINT.format(name=name, version=version)
     resp = my_get(url, s, JSON_HEADERS)
     if resp is None:
-        logger.info(f"Request Error: {name}, {version}")
+        logger.error(f"[ERROR] Request Error: {name}, {version}")
         return
 
     if resp.status_code == requests.codes.not_found:
-        logger.info(f"Release Not Found: {name}, {version}")
+        logger.error(f"[ERROR] Release Not Found: {name}, {version}")
         return
 
     try:
@@ -129,12 +195,12 @@ def release_wheel_url(name: str, version: str, s: requests.Session) -> str | Non
             (f["url"], f["upload_time"]) for f in urls if f["filename"].endswith(".whl")
         ]
         if not whl_files:
-            logger.info(f"No Wheel File: {name}, {version}")
+            logger.error(f"[ERROR] No Wheel File: {name}, {version}")
             return
         whl_url = max(whl_files, key=lambda x: x[1])[0]
         return whl_url
     except:
-        logger.error(f"Error: {name}, {version}")
+        logger.error(f"[ERROR] Error: {name}, {version}")
         return
 
 
@@ -190,29 +256,58 @@ def get_wheel_urls(mode: str, n_jobs: int = 1, batch_size: int = 1):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="python download_wheels.py",
-        description="Download the latest wheel file for a list of Python leases",
+        prog="python download_libraries.py",
+        description="Download the sources jars/latest wheel file for a list of Java/Python library leases",
     )
     parser.add_argument(
-        "--evaluation", action="store_true", help="on ground truth dataset"
+        "--java",
+        action="store_true",
+        help="download sources jars. DEFAULT: False",
     )
     parser.add_argument(
-        "--validation", action="store_true", help="on all update instances"
+        "--python",
+        action="store_true",
+        help="download wheels. DEFAULT: False",
     )
-    parser.add_argument("-n", "--n_jobs", type=int, default=1, help="number of workers")
+    parser.add_argument(
+        "--evaluation",
+        action="store_true",
+        help="on ground truth dataset. DEFAULT: False",
+    )
+    parser.add_argument(
+        "--validation",
+        action="store_true",
+        help="on all candidate update instances. DEFAULT: False",
+    )
+    parser.add_argument(
+        "-n", "--n_jobs", type=int, default=1, help="number of workers. DEFAULT: 1"
+    )
     parser.add_argument(
         "-b",
         "--batch_size",
         type=int,
         default=1,
-        help="number of libraries to be processed",
+        help="number of Python library releases to be processed. DEFAULT: 1",
     )
-    parser.add_argument("-d", "--dest_folder", required=True, type=str)
-
+    parser.add_argument(
+        "-d",
+        "--dest_folder",
+        required=True,
+        type=str,
+        help="folder to save downloaded libraries",
+    )
     args = parser.parse_args()
-    if args.evaluation:
-        get_wheel_urls("evaluation", args.n_jobs, args.batch_size)
-        download_wheels("evaluation", args.n_jobs, args.dest_folder)
-    if args.validation:
-        get_wheel_urls("validation", args.n_jobs, args.batch_size)
-        download_wheels("validation", args.n_jobs, args.dest_folder)
+
+    if args.java:
+        if args.evaluation:
+            download_jars("evaluation", args.n_jobs, args.dest_folder)
+        if args.validation:
+            download_jars("validation", args.n_jobs, args.dest_folder)
+
+    if args.python:
+        if args.evaluation:
+            get_wheel_urls("evaluation", args.n_jobs, args.batch_size)
+            download_wheels("evaluation", args.n_jobs, args.dest_folder)
+        if args.validation:
+            get_wheel_urls("validation", args.n_jobs, args.batch_size)
+            download_wheels("validation", args.n_jobs, args.dest_folder)

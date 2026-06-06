@@ -60,19 +60,19 @@ options:
 In our experiments, we set `n` as 100. It took about 20 minutes to finish. The results are stored in the `java_api_call_changes` and `py_api_call_changes` collections in the `bridge` database for Java and Python, respectively. Each document has the following fields: `commit`, `filepath`, `old_blob`, `new_blob`, `library`, `version_before`, `version_after`, `caller`, `old_callees`, and `new_callees`. It drops duplicate documents who shared the same `old_blob`, `new_blob`, `library`, `version_before`, `version_after`, and `caller`.
 
 ## Identify Update Instances
-`identify_update_instances.py` identifies Java/Python update instances from the API call discrepancies between old and new blobs. It has the following command line options:
+[`identify_update_instances.py`](./identify_update_instances.py) identifies candidate Java/Python update instances from the API call discrepancies between old and new blobs. It has the following command line options:
 ```
 usage: python identify_update_instances.py [-h] [--java] [--python]
 
 Mine update instances based on the API call changes between the new and old blobs.
 
 options:
-  -h, --help            show this help message and exit
-  --java                mine Java update instances
-  --python              mine Python update instances
+  -h, --help  show this help message and exit
+  --java      mine Java update instances. DEFAULT: False
+  --python    mine Python update instances. DEFAULT: False
 ```
 Run the following command to mine update instances.
 ```shell
 python identify_update_instances.py --java --python
 ```
-The identified update instances are stored in the `java_update_instances` and `py_update_instances` collections in the `bridge` database for Java and Python, respectively.
+The identified candidate update instances are stored in the `java_candidate_update_instances` and `py_candidate_update_instances` collections in the `bridge` database for Java and Python, respectively.
