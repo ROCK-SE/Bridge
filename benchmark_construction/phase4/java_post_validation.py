@@ -723,16 +723,19 @@ def check_existence(
     dedup_apis = []
     if not os.path.exists(sources_jar_path):
         return dedup_apis
-    with zipfile.ZipFile(sources_jar_path) as sources_jar:
-        candidate_apis = extract_api_signatures(sources_jar, api_name)
-        count_matching_apis = match_by_arg_count(candidate_apis, num_args)
+    try:
+        with zipfile.ZipFile(sources_jar_path) as sources_jar:
+            candidate_apis = extract_api_signatures(sources_jar, api_name)
+            count_matching_apis = match_by_arg_count(candidate_apis, num_args)
 
-        existing_para_types = []
-        for api in count_matching_apis:
-            if api["parameter_types"] in existing_para_types:
-                continue
-            dedup_apis.append(api)
-            existing_para_types.append(api["parameter_types"])
+            existing_para_types = []
+            for api in count_matching_apis:
+                if api["parameter_types"] in existing_para_types:
+                    continue
+                dedup_apis.append(api)
+                existing_para_types.append(api["parameter_types"])
+    except RecursionError as e:
+        pass
     return dedup_apis
 
 
