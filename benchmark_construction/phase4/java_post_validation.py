@@ -735,7 +735,10 @@ def check_existence(
                 dedup_apis.append(api)
                 existing_para_types.append(api["parameter_types"])
     except RecursionError as e:
+        logger.info(f"RecursionError: {library} {version} {api_name}")
         pass
+    except Exception as e:
+        logger.error(f"Other Error for {library} {version} {api_name}: {e}")
     return dedup_apis
 
 
