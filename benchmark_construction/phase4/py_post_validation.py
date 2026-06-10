@@ -48,7 +48,7 @@ py_call_query = PY_LANGUAGE.query(
 def contains_deprecation_text(text: str) -> bool:
     text = re.sub(r"\s+", " ", text).strip()
     sentences = SENTENCE_SPLIT_RE.split(text)
-    for s in sentences:
+    for s in sentences[:5]:
         for p in DEPRECATION_PATTERNS:
             if re.search(p, s, re.IGNORECASE):
                 return True
