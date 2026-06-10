@@ -211,12 +211,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--java",
         action="store_true",
-        help="mine Java update instances. DEFAULT: False",
+        help="validate Java update instances. DEFAULT: False",
     )
     parser.add_argument(
         "--python",
         action="store_true",
-        help="mine Python update instances. DEFAULT: False",
+        help="validate Python update instances. DEFAULT: False",
     )
     parser.add_argument(
         "-n", "--n_jobs", type=int, default=1, help="the number of workers. DEFAULT: 1"

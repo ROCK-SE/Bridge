@@ -29,7 +29,16 @@ python download_libraries.py -d <DEST_FOLDER> --java --python --evaluation 2>../
 ```
 The `<DEST_FOLDER>` is the same folder with the one in phase 3 for building import mappings.
 
-Then, perform post validation on all API call pairs in the ground truth dataset by executing code blocks in [`validation_for_eval.ipynb`](./phase4/validation_for_eval.ipynb) in the phase4 folder. The post validation results are stored as `{java,py}_validation_results.csv` in the [`benchmark/ground_truth`](../benchmark/ground_truth/) folder.
+Then, perform post validation on all API call pairs in the ground truth dataset. Run the following commands:
+```shell
+cd phase4
+python validation_for_eval.py --python --java
+```
+The post validation results are stored as `{java,py}_validation_results.csv` in the [`benchmark/ground_truth`](../benchmark/ground_truth/) folder.
 
 ## Performance Evaluation
-Execute code blocks in [`evaluation.ipynb`](./evaluation.ipynb) to evaluate the performance of different hyperparameter configurations.
+[`evaluation.py`](./evaluation.py) in this folder evaluates the performance of different hyperparameter configurations. Run the following command:
+```shell
+python evaluation.py --java --python
+```
+The evaluation results are stored as `{java,py}_evaluation_results.csv` in the [`benchmark/ground_truth`](../benchmark/ground_truth/) folder.
