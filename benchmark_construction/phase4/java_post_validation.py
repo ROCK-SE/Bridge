@@ -700,18 +700,17 @@ def match_by_arg_count(apis: list[dict], num_args: int):
             if num_args > 0:
                 continue
             # arg_types == [], match
-            res.append(api | {"count_match": 1})
+            res.append(api)
 
         # Spread paramter case, num_args can be num_paras-1, num_paras, ...
         elif para_types[-1].endswith(var_symbol):
             if num_args < (len(para_types) - 1):
                 continue
-            # we assign a lower count_match value
-            res.append(api | {"count_match": 0.5})
+            res.append(api)
         # In other cases, num_args should be equal to num_paras
         else:
             if num_args == len(para_types):
-                res.append(api | {"count_match": 1})
+                res.append(api)
 
     return res
 
