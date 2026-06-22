@@ -3,6 +3,7 @@ import json
 import os
 
 import pandas as pd
+from java_api_signature_resolver import best_cand
 from java_post_validation import check_existence as check_existence_java
 from joblib import Parallel, delayed
 from py_post_validation import APIResolver
@@ -35,25 +36,39 @@ def java_validation(
     library: str,
     version1: str,
     api_fqn1: str,
-    arg_count1: int,
+    arguments1: int,
     version2: str,
     api_fqn2: str,
-    arg_count2: int,
+    arguments2: int,
 ):
+    arg_count1 = len(arguments1)
     # 1. Existence check
     old_existence = True
     old_api_sigs = check_existence_java(
         library, version1, dest_folder, api_fqn1, arg_count1
     )
+    most_prob_old_param_types = []
     if not old_api_sigs:
         old_existence = False
+    elif len(old_api_sigs) == 1:
+        most_prob_old_param_types = old_api_sigs[0]["parameter_types"]
+    else:
+        candidates = [sig["parameter_types"] for sig in old_api_sigs]
+        most_prob_old_param_types = best_cand(arguments1, candidates)
 
+    arg_count2 = len(arguments2)
     new_existence = True
     new_api_sigs = check_existence_java(
         library, version2, dest_folder, api_fqn2, arg_count2
     )
+    most_prob_new_param_types = []
     if not new_api_sigs:
         new_existence = False
+    elif len(new_api_sigs) == 1:
+        most_prob_new_param_types = new_api_sigs[0]["parameter_types"]
+    else:
+        candidates = [sig["parameter_types"] for sig in new_api_sigs]
+        most_prob_new_param_types = best_cand(arguments2, candidates)
 
     # 2. Removal/deprecation check
     parts1 = [int(_) for _ in version1.split(".")]
@@ -84,7 +99,11 @@ def java_validation(
 
     res = {
         "old_existence": old_existence,
+        "old_candidate_sigs": old_api_sigs,
+        "most_prob_old_param_types": most_prob_old_param_types,
         "new_existence": new_existence,
+        "new_candidate_sigs": new_api_sigs,
+        "most_prob_new_param_types": most_prob_new_param_types,
         "old_removal": old_removal,
         "old_deprecated": old_deprecated,
         "validation": validation,
@@ -163,16 +182,14 @@ def validate_per_instance(doc: dict, lang: str):
     old_api_fqn = old_api_call["full_name"]
     new_api_fqn = new_api_call["full_name"]
     if lang == "java":
-        old_arg_count = len(old_api_call["arguments"])
-        new_arg_count = len(new_api_call["arguments"])
         validation_results = java_validation(
             library,
             version_before,
             old_api_fqn,
-            old_arg_count,
+            old_api_call["arguments"],
             version_after,
             new_api_fqn,
-            new_arg_count,
+            new_api_call["arguments"],
         )
 
     elif lang == "py":
