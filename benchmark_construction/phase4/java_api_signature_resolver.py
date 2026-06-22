@@ -253,7 +253,7 @@ def type_matcher(arg_type: str, param_type: str) -> float:
     matched = 0
     for p in param_parts:
         if p in arg_parts:
-            matched += 1
+            matched += 0.4
     return matched / len(param_parts)
 
 
