@@ -1,6 +1,4 @@
 import argparse
-import json
-import os
 
 from api_call_similarity import similarity_score
 from pymongo import MongoClient
@@ -9,6 +7,12 @@ from utils import insert_many_skip_large
 
 client = MongoClient("127.0.0.1", 27017)
 db = client["bridge"]
+
+
+DEFAULT_PARAMS = {
+    "py": {"thresh": 0.35, "weights": [0.5, 0.5]},
+    "java": {"thresh": 0.45, "weights": [1 / 3, 1 / 3, 1 / 3]},
+}
 
 
 def greedy_match(scores: list[tuple[int, int, float]], thresh: float):
@@ -66,22 +70,9 @@ def process_per_doc(
 
 
 def main(lang: str):
-    hyperparam_path = "./hyperparams.json"
-    if not os.path.exists(hyperparam_path):
-        print("hyperparams.json does not exist. Please specify hyperparameters in it.")
-        return
-    hyperparams = json.load(open(hyperparam_path)).get(lang)
-    if hyperparams is None:
-        print(f"Please specify hyperparameters for {lang}")
-        return
+    hyperparams = DEFAULT_PARAMS.get(lang)
     thresh = hyperparams.get("thresh")
-    if thresh is None:
-        print(f"Please specify threshold (float) for {lang}")
-        return
     weights = hyperparams.get("weights")
-    if weights is None:
-        print(f"Please specify weights (list of float with sum as 1.0) for {lang}")
-        return
     print(f"{lang}: {weights=}, {thresh=}")
 
     api_call_changes_col = db[f"{lang}_api_call_changes"]
