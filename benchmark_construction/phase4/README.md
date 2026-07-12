@@ -30,25 +30,22 @@ python download_libraries.py -d <DEST_FOLDER> -n <number of workers, default 1> 
 The `<DEST_FOLDER>` is the same with the one used in phase 3 for building import mappings.
 
 
-
-`java_api_update_validator.py` downloads the sources jar of Java library release and check the exitence of an API in it. It has the following command line options:
-
+## Perform Post Validation
+`post_validation.py` resolves the signature of API call in corresponding library versions and validates the validity of mined candidate update instances. It has the following command line options:
 ```
-usage: python java_api_update_validator.py [-h] [-n N_JOBS] [-d] [-c] --dest_folder DEST_FOLDER
+usage: python post_validation.py [-h] [--java] [--python] [-n N_JOBS]
 
-Validate candidate Java library API update instances
+Perform post validation on mined candidate update instances.
 
 options:
   -h, --help            show this help message and exit
+  --java                validate Java update instances. DEFAULT: False
+  --python              validate Python update instances. DEFAULT: False
   -n N_JOBS, --n_jobs N_JOBS
-                        number of workers
-  -d, --download        download sources jars
-  -c, --check           check whether apis in each update instance exist in corresponding library release
-  --dest_folder DEST_FOLDER
-                        the folder to store downloaded sources jars
+                        the number of workers. DEFAULT: 1
 ```
-Run the following command to remove API update instances in the `java_candidate_api_update_instances` where APIs does not exist in corresponding Java library releases:
+Run the following command to perform post validation:
 ```shell
-python mine_api_updates.py -d -c --dest_folder <DEST_FOLDER> -n <Number of processes, default 1>
+python post_validation.py -n <Number of workers, default 1> --python --java
 ```
-In our experiments, we set `n` 128. It took about 1 hour to finish. The results are stored in the `java_existent_api_update_instances` collection in the `api_update` database.
+In our experiments, we set `n` 128. It took about 2 hours to finish. The results are stored in the `java_candidate_update_instances` and `py_candidate_update_instances` collections in the `bridge` database.
