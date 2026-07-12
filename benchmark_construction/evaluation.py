@@ -65,7 +65,7 @@ def classify_by_thresh(
     return res
 
 
-def calculate_f1(df: DataFrame):
+def calculate_metrics(df: DataFrame):
     p = precision_score(df["label"], df["pred"], zero_division=1.0)
     r = recall_score(df["label"], df["pred"])
     f1 = f1_score(df["label"], df["pred"])
@@ -75,8 +75,9 @@ def calculate_f1(df: DataFrame):
 def kfold_evaluation(
     df, folds, params, feature_cols, phantom_pairs: DataFrame | None = None
 ):
-    total_test_f1 = 0.0
-    for train_idx, test_idx in folds:
+    res = []
+    fold_idx = 0
+    for fold_idx, (train_idx, test_idx) in enumerate(folds, start=1):
         train_df, test_df = df.iloc[train_idx].copy(), df.iloc[test_idx].copy()
         train_df["score"] = sum(
             train_df[feature_cols[i]] * params[i] for i in range(len(feature_cols))
@@ -85,9 +86,9 @@ def kfold_evaluation(
 
         best_thresh = None
         best_train_f1 = 0.0
+        matched_train_df = match(train_df)
         for thresh in np.linspace(0.0, 1.0, 21):
-            matched_train_df = match(train_df)
-            train_f1, _, _ = calculate_f1(
+            train_f1, _, _ = calculate_metrics(
                 classify_by_thresh(matched_train_df, thresh, phantom_pairs)
             )
             if train_f1 >= best_train_f1:
@@ -99,11 +100,11 @@ def kfold_evaluation(
         )
         test_df["index_sim"] = abs(test_df["new_index"] - test_df["old_index"])
         matched_test_df = match(test_df)
-        test_f1, _, _ = calculate_f1(
+        test_f1, test_p, test_r = calculate_metrics(
             classify_by_thresh(matched_test_df, best_thresh, phantom_pairs)
         )
-        total_test_f1 += test_f1
-    return params + [total_test_f1 / len(folds)]
+        res.append(params + [fold_idx, best_thresh, test_f1, test_p, test_r])
+    return res
 
 
 def kfold_grid_search(df, feature_cols, phantom_pairs: DataFrame | None = None):
@@ -117,7 +118,9 @@ def kfold_grid_search(df, feature_cols, phantom_pairs: DataFrame | None = None):
         for w in product(range(1, scale + 1), repeat=num_features)
         if sum(w) == scale
     ]
-    print(f"{len(param_grid)} weight confgurations")
+    if len(feature_cols) == 3:
+        param_grid.append([1 / 3, 1 / 3, 1 / 3])
+    print(f"{len(param_grid)} weight configurations")
 
     # 2. Grid Search with K-fold cross validation
     gkf = GroupKFold(n_splits=5)
@@ -127,7 +130,10 @@ def kfold_grid_search(df, feature_cols, phantom_pairs: DataFrame | None = None):
         delayed(kfold_evaluation)(df, folds, params, feature_cols, phantom_pairs)
         for params in tqdm(param_grid)
     )
-    return sorted(res, key=lambda r: r[-1], reverse=True)
+    return pd.DataFrame(
+        [_ for wc in res for _ in wc],
+        columns=feature_cols + ["fold", "threshold", "f1", "precision", "recall"],
+    )
 
 
 def full_evaluation(df, params, feature_cols, phantom_pairs: DataFrame | None = None):
@@ -136,35 +142,16 @@ def full_evaluation(df, params, feature_cols, phantom_pairs: DataFrame | None = 
         tmp[feature_cols[i]] * params[i] for i in range(len(feature_cols))
     )
     tmp["index_sim"] = abs(tmp["new_index"] - tmp["old_index"])
-    best_f1 = 0.0
+    res = []
+    matched_tmp = match(tmp)
     for thresh in np.linspace(0.0, 1.0, 21):
-        matched_tmp = match(tmp)
-        f1, _, _ = calculate_f1(classify_by_thresh(matched_tmp, thresh, phantom_pairs))
-        if f1 >= best_f1:
-            best_f1 = f1
-    return params + [best_f1]
-
-
-def full_grid_search(df, feature_cols, phantom_pairs: DataFrame | None = None):
-    """Finds the best hyperparameters/weights using a sub-split of the training data."""
-    # 1. Define Search Space
-    num_features = len(feature_cols)
-    step = 0.1
-    scale = int(1 / step)
-    param_grid = [
-        [_ * step for _ in w]
-        for w in product(range(1, scale + 1), repeat=num_features)
-        if sum(w) == scale
-    ]
-    print(f"{len(param_grid)} weight confgurations")
-
-    # 2. Grid Search with K-fold cross validation
-    n_jobs = 128 if len(param_grid) > 128 else len(param_grid)
-    res = Parallel(n_jobs=n_jobs)(
-        delayed(full_evaluation)(df, params, feature_cols, phantom_pairs)
-        for params in tqdm(param_grid)
+        f1, p, r = calculate_metrics(
+            classify_by_thresh(matched_tmp, thresh, phantom_pairs)
+        )
+        res.append(params + [thresh, f1, p, r])
+    return pd.DataFrame(
+        res, columns=feature_cols + ["threshold", "f1", "precision", "recall"]
     )
-    return sorted(res, key=lambda r: r[-1], reverse=True)
 
 
 def main(lang: str):
@@ -176,28 +163,23 @@ def main(lang: str):
     validation_results = pd.read_csv(
         f"../benchmark/ground_truth/{lang}_validation_results.csv"
     )
-    validation_fail_api_pairs = validation_results[~validation_results["validation"]][
+    validation_fail_pairs = validation_results[~validation_results["validation"]][
         ["record_id", "old_index", "new_index"]
     ]
-    kfold_res = kfold_grid_search(df, feature_cols)
-    kfold_post_res = kfold_grid_search(df, feature_cols, validation_fail_api_pairs)
-    full_res = full_grid_search(df, feature_cols)
-    full_post_res = full_grid_search(df, feature_cols, validation_fail_api_pairs)
-
-    columns = feature_cols + ["F1_score"]
-    kfold_res = pd.DataFrame(kfold_res, columns=columns)
-    kfold_post_res = pd.DataFrame(kfold_post_res, columns=columns)
-    full_res = pd.DataFrame(full_res, columns=columns)
-    full_post_res = pd.DataFrame(full_post_res, columns=columns)
-    kfold_res["type"] = "kfold"
-    kfold_post_res["type"] = "kfold_post"
-    full_res["type"] = "full"
-    full_post_res["type"] = "full_post"
-    res_df = pd.concat([full_post_res, full_res, kfold_post_res, kfold_res])
-    res_df.to_csv(
-        f"../benchmark/ground_truth/{lang}_evaluation_results.csv", index=False
+    weight_sensitivity = kfold_grid_search(df, feature_cols, validation_fail_pairs)
+    weight_sensitivity.to_csv(
+        f"../benchmark/evaluation/{lang}_weight_analysis.csv", index=False
     )
-    return res_df
+    equal_weights = [1 / len(feature_cols) for _ in feature_cols]
+    threshold_sensitivity = full_evaluation(
+        df, equal_weights, feature_cols, validation_fail_pairs
+    )
+    threshold_sensitivity["Phase4"] = True
+    phase4_ablation = full_evaluation(df, equal_weights, feature_cols)
+    phase4_ablation["Phase4"] = False
+    pd.concat([threshold_sensitivity, phase4_ablation]).to_csv(
+        f"../benchmark/evaluation/{lang}_threshold_ablation.csv", index=False
+    )
 
 
 if __name__ == "__main__":
