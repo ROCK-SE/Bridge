@@ -205,7 +205,6 @@ if __name__ == "__main__":
                 "class_sim",
                 "method_sim",
                 "arg_sim",
-                "offset_sim",
                 "label",
             ],
         )
@@ -223,7 +222,6 @@ if __name__ == "__main__":
                 "new_index",
                 "fqn_sim",
                 "arg_sim",
-                "offset_sim",
                 "label",
             ],
         )
