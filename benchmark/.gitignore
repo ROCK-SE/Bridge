@@ -3,3 +3,4 @@ RepFinder
 *.csv
 *.xlsx
 *.pdf
+llm_evaluation/*
