@@ -159,7 +159,7 @@ def sample_instances(instances, signatures):
             sampled_instance = rng.sample(instances[key], 1)[0]
         except:
             print(key)
-            break
+            continue
         data = {
             "query_id": sig["query_id"],
             "language": sig["language"],
@@ -174,7 +174,7 @@ def context_level_dataset(lang: str):
     instances = obtain_all_instances(lang)
     instance_samples = sample_instances(instances, signatures)
 
-    output_path = f"../benchmark/llm_evaluation/{lang}_instance_level.jsonl"
+    output_path = f"../benchmark/llm_evaluation/{lang}_context_level.jsonl"
     outf = open(output_path, "w")
     if lang == "python":
         call_context_extractor = extract_call_context_python

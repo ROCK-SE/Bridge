@@ -413,7 +413,10 @@ def parse_variable_types_java(tree: Tree):
         if identifier_str == "_":
             continue
 
-        if declaration_node.type in ["enhanced_for_statement", "instanceof_expression"]:
+        if (
+            declaration_node.type in ["enhanced_for_statement", "instanceof_expression"]
+            or len(declaration_stmt) > 100
+        ):
             declaration_stmt = (
                 f"{type_node.text.decode(errors='ignore')} {identifier_str};"
             )
