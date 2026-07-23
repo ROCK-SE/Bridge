@@ -1,8 +1,8 @@
-"""Run the signature level replacement API evaluation.
+"""Run the signature or context level replacement API evaluation.
 
-The script consumes the validated final dataset, constructs unique versioned
-signature queries, and calls an OpenAI compatible chat completions endpoint.
-Results are appended to JSONL so interrupted runs can be resumed safely.
+The script consumes examples constructed from the validated final dataset and
+calls an OpenAI compatible chat completions endpoint. Results are appended to
+JSONL so interrupted runs can be resumed safely.
 """
 
 import argparse
@@ -14,7 +14,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from llm_evaluation_data import signature_level_dataset
+from llm_evaluation_data import context_level_dataset, signature_level_dataset
 from openai import OpenAI
 from tqdm import tqdm
 
@@ -57,6 +57,50 @@ Represent the replacement using its public fully qualified name in this format:
 
 module.submodule.api"""
 
+JAVA_CONTEXT_PROMPT = """A project updates the following Java library:
+
+Library: {library}
+Old version: {old_version}
+New version: {new_version}
+
+The following legacy API is deprecated or removed:
+
+Legacy API: {legacy_api}
+
+The legacy API call occurs in the following client code context:
+
+```java
+{context}
+```
+
+Recommend the replacement API in the new version.
+
+Represent the replacement using its fully qualified API signature. Include parameter types in the same source-level notation as the legacy API when the replacement has parameters. Use this format:
+
+package.Class.method(parameterType1,parameterType2)"""
+
+PYTHON_CONTEXT_PROMPT = """A project updates the following Python library:
+
+Library: {library}
+Old version: {old_version}
+New version: {new_version}
+
+The following legacy API is deprecated or removed:
+
+Legacy API: {legacy_api}
+
+The legacy API call occurs in the following client code context:
+
+```python
+{context}
+```
+
+Recommend the replacement API in the new version.
+
+Represent the replacement using its public fully qualified name in this format:
+
+module.submodule.api"""
+
 
 def write_jsonl_row(file: Any, row: dict[str, Any]) -> None:
     file.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
@@ -82,12 +126,27 @@ def summarize(
     }
 
 
-def load_examples(language: str):
-    path = f"../benchmark/llm_evaluation/{language}_signature_level.jsonl"
+def load_examples(language: str, level: str) -> list[dict[str, Any]]:
+    path = f"../benchmark/llm_evaluation/{language}_{level}_level.jsonl"
     if not os.path.exists(path):
-        signature_level_dataset(language)
+        if level == "signature":
+            signature_level_dataset(language)
+        else:
+            context_level_dataset(language)
 
     samples = []
+    required_fields = {
+        "query_id",
+        "language",
+        "library",
+        "old_version",
+        "new_version",
+        "legacy_api",
+        "reference_replacement",
+    }
+    if level == "context":
+        required_fields.add("context")
+
     with open(path, encoding="utf-8") as f:
         for line_number, line in enumerate(f, start=1):
             if not line.strip():
@@ -96,6 +155,20 @@ def load_examples(language: str):
                 row = json.loads(line)
             except json.JSONDecodeError as error:
                 raise ValueError(f"Invalid JSON at {path}:{line_number}") from error
+
+            missing = required_fields.difference(row)
+            if missing:
+                fields = ", ".join(sorted(missing))
+                raise ValueError(f"Missing fields at {path}:{line_number}: {fields}")
+            if row["language"] != language:
+                raise ValueError(
+                    f"Unexpected language at {path}:{line_number}: "
+                    f"{row['language']!r}"
+                )
+            if level == "context" and (
+                not isinstance(row["context"], str) or not row["context"].strip()
+            ):
+                raise ValueError(f"Empty context at {path}:{line_number}")
             samples.append(row)
     return samples
 
@@ -129,14 +202,25 @@ def read_latest_results(path: str) -> dict[str, dict[str, Any]]:
     return latest
 
 
-def build_user_prompt(example: dict) -> str:
-    template = JAVA_PROMPT if example["language"] == "java" else PYTHON_PROMPT
-    return template.format(
-        library=example["library"],
-        old_version=example["old_version"],
-        new_version=example["new_version"],
-        legacy_api=example["legacy_api"],
-    )
+def build_user_prompt(example: dict, level: str) -> str:
+    if level == "context":
+        template = (
+            JAVA_CONTEXT_PROMPT
+            if example["language"] == "java"
+            else PYTHON_CONTEXT_PROMPT
+        )
+    else:
+        template = JAVA_PROMPT if example["language"] == "java" else PYTHON_PROMPT
+
+    values = {
+        "library": example["library"],
+        "old_version": example["old_version"],
+        "new_version": example["new_version"],
+        "legacy_api": example["legacy_api"],
+    }
+    if level == "context":
+        values["context"] = example["context"]
+    return template.format(**values)
 
 
 def parse_response(content: str) -> tuple[str | None, str | None]:
@@ -196,7 +280,7 @@ def response_usage(response: Any) -> dict[str, int | None]:
 
 
 def evaluate_one(client: Any, example: dict, args) -> dict[str, Any]:
-    user_prompt = build_user_prompt(example)
+    user_prompt = build_user_prompt(example, args.level)
     request: dict[str, Any] = {
         "model": args.model,
         "messages": [
@@ -254,14 +338,16 @@ def evaluate_one(client: Any, example: dict, args) -> dict[str, Any]:
 
 
 def run(args: argparse.Namespace) -> None:
-    examples = sample_examples(load_examples(args.language), args.limit, args.seed)
-    print(f"Select {len(examples):,} signature-level examples")
+    examples = sample_examples(
+        load_examples(args.language, args.level), args.limit, args.seed
+    )
+    print(f"Select {len(examples):,} {args.level}-level examples")
 
     api_key = os.environ.get(args.api_key_env)
     if not api_key:
         raise SystemExit(f"Environment variable {args.api_key_env} is not set")
 
-    output_file = f"{args.language}_signature_{safe_model_name(args.model)}.jsonl"
+    output_file = f"{args.language}_{args.level}_{safe_model_name(args.model)}.jsonl"
     output_path = f"../benchmark/llm_evaluation/{output_file}"
     if args.overwrite and os.path.exists(output_path):
         with open(output_path, "w") as f:
@@ -295,7 +381,9 @@ def run(args: argparse.Namespace) -> None:
                 for example in pending
             }
             for future in tqdm(
-                as_completed(futures), total=len(futures), desc="Signature evaluation"
+                as_completed(futures),
+                total=len(futures),
+                desc=f"{args.level.capitalize()} evaluation",
             ):
                 row = future.result()
                 latest[row["query_id"]] = row
@@ -304,6 +392,7 @@ def run(args: argparse.Namespace) -> None:
     summary = {
         "language": args.language,
         "model": args.model,
+        "evaluation_level": args.level,
         "seed": args.seed,
         **summarize(examples, latest),
     }
@@ -317,6 +406,12 @@ def run(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Evaluate an OpenAI-compatible LLM on replacement API recommendation."
+    )
+    parser.add_argument(
+        "--level",
+        choices=("signature", "context"),
+        required=True,
+        help="Input setting to evaluate",
     )
     parser.add_argument("--language", choices=("java", "python"), required=True)
     parser.add_argument(
