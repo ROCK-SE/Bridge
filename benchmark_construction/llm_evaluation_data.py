@@ -13,7 +13,6 @@ from pymongo import MongoClient
 
 client = MongoClient("127.0.0.1", 27017)
 db = client["bridge"]
-rng = random.Random(42)
 
 
 def signature_level_dataset(lang: str):
@@ -80,6 +79,19 @@ def signature_level_dataset(lang: str):
             f.write(json.dumps(s, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
+def obtain_all_sigs(lang: str):
+    signature_file = f"../benchmark/llm_evaluation/{lang}_signature_level.jsonl"
+    if not os.path.exists(signature_file):
+        signature_level_dataset(lang)
+
+    signatures = []
+    with open(signature_file) as inf:
+        for line in inf:
+            row = json.loads(line.strip())
+            signatures.append(row)
+    return signatures
+
+
 def obtain_all_instances(lang: str):
     col = db[f"java_candidate_update_instances"]
     if lang == "python":
@@ -132,6 +144,7 @@ def obtain_all_instances(lang: str):
 
 def sample_instances(instances, signatures):
     sampled_instances = []
+    rng = random.Random(42)
     for sig in signatures:
         key = tuple(
             (
@@ -157,15 +170,7 @@ def sample_instances(instances, signatures):
 
 
 def context_level_dataset(lang: str):
-    signature_file = f"../benchmark/llm_evaluation/{lang}_signature_level.jsonl"
-    if not os.path.exists(signature_file):
-        signature_level_dataset(lang)
-
-    signatures = []
-    with open(signature_file) as inf:
-        for line in inf:
-            row = json.loads(line.strip())
-            signatures.append(row)
+    signatures = obtain_all_sigs(lang)
     instances = obtain_all_instances(lang)
     instance_samples = sample_instances(instances, signatures)
 
@@ -207,3 +212,4 @@ if __name__ == "__main__":
     # signature_level_dataset("java")
     # signature_level_dataset("python")
     context_level_dataset("python")
+    context_level_dataset("java")
