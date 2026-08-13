@@ -209,7 +209,7 @@ def context_level_dataset(lang: str):
 
 
 if __name__ == "__main__":
-    # signature_level_dataset("java")
-    # signature_level_dataset("python")
+    signature_level_dataset("java")
+    signature_level_dataset("python")
     context_level_dataset("python")
     context_level_dataset("java")
