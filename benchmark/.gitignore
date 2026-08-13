@@ -4,3 +4,4 @@ RepFinder
 *.xlsx
 *.pdf
 llm_evaluation/*
+!ground_truth/*_record_samples.xlsx
