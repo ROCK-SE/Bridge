@@ -2,3 +2,5 @@
 
 1. Refer to the `Benchmark Construction` section in the [INSTALL.md](./INSTALL.md) to setup environment for this step.
 2. Follow instructions in the [README.md](./benchmark_construction/README.md) in the `benchmark_construction` to construct the benchmark and run the LLM evaluation.
+
+The mined datdaset is available on [figshare](https://doi.org/10.6084/m9.figshare.29603756)
